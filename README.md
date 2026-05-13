@@ -6,10 +6,10 @@ This repo is built as an AI Engineer interview artifact: clean ingestion, metada
 
 ## Current scope
 
-Day 1 pipeline:
+Current pipeline:
 
 ```txt
-Protocol Docs -> Loader -> Chunker -> Citation Metadata -> CLI Summary
+Protocol Docs -> Loader -> Chunker -> OpenAI Embeddings -> Vector Store -> Retriever -> Retrieved Context with Sources
 ```
 
 Implemented:
@@ -23,15 +23,17 @@ Implemented:
   - `sizeBytes`
   - `domain`
 - Fixed-size overlapping chunks
+- Production OpenAI-compatible embeddings client
+- In-memory vector store using cosine similarity
+- Retriever that embeds the user query and returns top-k matching chunks
 - Seed perps/risk docs
 - Vitest tests
 - CLI loader demo
+- CLI retriever demo
 
 Not yet added:
 
-- Embeddings
-- Vector DB
-- Retriever
+- Persistent vector DB
 - LLM answer generation
 - RAG evals
 
@@ -68,6 +70,20 @@ Load seed docs:
 bun run load data/docs
 ```
 
+Retrieve production context using OpenAI embeddings:
+
+```bash
+export OPENAI_API_KEY=your_api_key
+bun run retrieve data/docs "what happens when margin falls below maintenance?" 2
+```
+
+Optional embedding config:
+
+```bash
+export EMBEDDING_MODEL=text-embedding-3-small
+export OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
 Example output:
 
 ```json
@@ -80,12 +96,12 @@ Example output:
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The first milestone focuses on document ingestion, metadata, citation readiness, chunking, tests, and a runnable CLI before adding embeddings or an LLM. This keeps the system debuggable: retrieval quality depends on clean documents and stable chunk metadata before model calls enter the loop.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks them with citation metadata, creates production OpenAI embeddings, stores vectors, and retrieves top-k context for user questions. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, and retriever are separated so the next production step can replace the in-memory store with pgvector/Pinecone/Qdrant without changing the rest of the pipeline.
 
 ## Next milestones
 
-1. Add deterministic local embedding interface and mock embeddings for tests.
-2. Add in-memory vector store.
-3. Add retriever with top-k scoring.
-4. Add RAG answer format with citations.
-5. Add eval cases for funding, margin, liquidation, and oracle risk questions.
+1. Add persistent vector storage with pgvector, Qdrant, or Pinecone.
+2. Add RAG answer generation with citations.
+3. Add eval cases for funding, margin, liquidation, and oracle risk questions.
+4. Add ingestion cache so unchanged docs are not re-embedded.
+5. Add tracing/logging for retrieval scores and selected sources.

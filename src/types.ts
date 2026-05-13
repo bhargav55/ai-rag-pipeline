@@ -20,3 +20,16 @@ export type ChunkOptions = {
   maxChars: number;
   overlapChars: number;
 };
+
+export type EmbeddedChunk = Chunk & {
+  embedding: number[];
+};
+
+export type SearchResult = {
+  chunk: EmbeddedChunk;
+  score: number;
+};
+
+export type EmbeddingClient = {
+  embed(input: string[]): Promise<number[][]>;
+};
