@@ -1,0 +1,19 @@
+{
+  "name": "ai-rag-pipeline",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "TypeScript/Bun RAG pipeline for perps and blockchain protocol docs.",
+  "scripts": {
+    "test": "vitest run",
+    "load": "bun run src/cli/load.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  },
+  "dependencies": {
+    "zod": "latest"
+  }
+}

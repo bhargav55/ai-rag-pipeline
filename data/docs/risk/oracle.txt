@@ -1,0 +1,1 @@
+Oracle risk appears when price feeds are stale, manipulated, unavailable, or inconsistent across venues. Perps protocols usually combine freshness checks, confidence bounds, and circuit breakers.
