@@ -260,6 +260,8 @@ Then the Python Ragas runner scores:
 - context precision
 - context recall
 
+For a plain-English explanation of how Ragas works, see [`docs/ragas-framework.md`](docs/ragas-framework.md).
+
 The production answer model can remain `gpt-5.5`. The Ragas judge model defaults to `gpt-4o-mini` via `RAGAS_LLM_MODEL` because Ragas/LangChain may set low temperature internally, and newer GPT-5.5 APIs reject non-default temperature values.
 
 ## Checking Qdrant records
