@@ -137,6 +137,36 @@ Example answer shape:
 }
 ```
 
+## Hosted Qdrant on Railway
+
+A Railway-hosted Qdrant service is available for production-style demos:
+
+- Railway project: `ai-rag-qdrant`
+- Railway service: `qdrant`
+- Public URL: `https://qdrant-production-b4b4.up.railway.app`
+- Persistent volume mount: `/qdrant/storage`
+- Qdrant API key is configured on Railway as `QDRANT__SERVICE__API_KEY`
+
+Use the hosted vector DB from this app:
+
+```bash
+export VECTOR_STORE=qdrant
+export QDRANT_URL=https://qdrant-production-b4b4.up.railway.app
+export QDRANT_COLLECTION=protocol_docs
+export QDRANT_API_KEY=***
+export EMBEDDING_DIMENSION=1536
+
+bun run ingest data/docs
+bun run ask "what happens when margin falls below maintenance?" 3
+```
+
+For local development, you can still run Qdrant with Docker:
+
+```bash
+docker compose up -d qdrant
+export QDRANT_URL=http://localhost:6333
+```
+
 ## Optional pgvector backend
 
 Qdrant is the default separate vector database. If you want the Postgres-backed alternative:
