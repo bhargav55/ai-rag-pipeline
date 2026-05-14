@@ -18,6 +18,21 @@ Protocol Docs
 -> Answer with Sources
 ```
 
+## What this demonstrates
+
+This project shows the core production RAG pattern:
+
+```txt
+Offline ingest path:
+all docs -> chunks -> embeddings -> Qdrant
+
+Online ask path:
+question -> question embedding -> Qdrant cosine search -> top-k chunks -> LLM prompt -> answer + sources
+```
+
+Qdrant does not generate answers. It retrieves relevant source chunks.
+The LLM generates the final answer, grounded by the retrieved chunks.
+
 ## Implemented
 
 - Recursive `.md` / `.txt` document loader
@@ -51,6 +66,41 @@ Protocol Docs
 - Optional Postgres + pgvector backend
 - OpenAI-compatible embeddings/chat APIs
 
+## Models and retrieval config
+
+Answer model:
+
+```bash
+CHAT_MODEL=gpt-5.5
+```
+
+Embedding model:
+
+```bash
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+Embedding dimension:
+
+```bash
+EMBEDDING_DIMENSION=1536
+```
+
+Vector search:
+
+```txt
+Qdrant distance = Cosine
+```
+
+Chunking:
+
+```txt
+maxChars: 800
+overlapChars: 120
+```
+
+Meaning each document is split into chunks of up to 800 characters with 120 characters of overlap between neighboring chunks.
+
 ## Setup
 
 Install dependencies:
@@ -59,28 +109,25 @@ Install dependencies:
 bun install
 ```
 
-Start local Qdrant vector DB:
-
-```bash
-docker compose up -d qdrant
-```
-
-Set vector DB config:
+Create a local `.env` file. Do not commit it.
 
 ```bash
 export VECTOR_STORE=qdrant
-export QDRANT_URL=http://localhost:6333
+export QDRANT_URL=https://qdrant-production-b4b4.up.railway.app
 export QDRANT_COLLECTION=protocol_docs
+export QDRANT_API_KEY=***
 export EMBEDDING_DIMENSION=1536
-```
 
-Set OpenAI-compatible API config:
-
-```bash
 export OPENAI_API_KEY=***
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
 export CHAT_MODEL=gpt-5.5
+```
+
+Load env vars before running CLI commands:
+
+```bash
+source .env
 ```
 
 ## Commands
@@ -103,6 +150,16 @@ Load docs without embeddings:
 bun run load data/docs
 ```
 
+Expected output for the current seed docs:
+
+```json
+{
+  "docsDir": "data/docs",
+  "documents": 4,
+  "chunks": 20
+}
+```
+
 One-shot retrieval without vector DB persistence:
 
 ```bash
@@ -115,27 +172,94 @@ Ingest docs into Qdrant:
 bun run ingest data/docs
 ```
 
+Expected output for the current seed docs:
+
+```json
+{
+  "docsDir": "data/docs",
+  "documents": 4,
+  "chunks": 20,
+  "store": "qdrant"
+}
+```
+
 Ask a full RAG question using Qdrant + LLM answer generation:
 
 ```bash
 bun run ask "what happens when margin falls below maintenance?" 3
 ```
 
+The final argument is `topK`. For example, `3` means retrieve the top 3 most relevant chunks from Qdrant and pass those chunks to the LLM as context.
+
 Example answer shape:
 
 ```json
 {
   "store": "qdrant",
-  "answer": "Liquidation happens when account equity falls below maintenance margin [1].",
+  "answer": "When account equity falls below the maintenance margin requirement, the position becomes eligible for liquidation [1].",
   "sources": [
+    {
+      "sourcePath": "perps/margin.md",
+      "chunkId": "perps/margin.md#chunk-1",
+      "score": 0.5373063
+    },
     {
       "sourcePath": "risk/liquidation.md",
       "chunkId": "risk/liquidation.md#chunk-0",
-      "score": 0.91
+      "score": 0.5180107
     }
   ]
 }
 ```
+
+## Checking Qdrant records
+
+Count stored chunks:
+
+```bash
+curl -s \
+  -X POST "$QDRANT_URL/collections/protocol_docs/points/count" \
+  -H "api-key: $QDRANT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"exact": true}' | jq
+```
+
+Expected count after a fresh ingest of the current seed docs:
+
+```json
+{
+  "result": {
+    "count": 20
+  },
+  "status": "ok"
+}
+```
+
+View stored records without large vectors:
+
+```bash
+curl -s \
+  -X POST "$QDRANT_URL/collections/protocol_docs/points/scroll" \
+  -H "api-key: $QDRANT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "limit": 5,
+    "with_payload": true,
+    "with_vector": false
+  }' | jq
+```
+
+Delete the collection and start fresh:
+
+```bash
+curl -s \
+  -X DELETE "$QDRANT_URL/collections/protocol_docs" \
+  -H "api-key: $QDRANT_API_KEY" | jq
+
+bun run ingest data/docs
+```
+
+Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 20, not duplicate to 40.
 
 ## Hosted Qdrant on Railway
 
@@ -183,12 +307,37 @@ bun run ask "what happens when margin falls below maintenance?" 3
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks them with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks all documents with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search.
+
+Important distinction:
+
+- Qdrant/RAG retrieves the relevant source chunks.
+- The LLM writes the final answer using those chunks.
+- Returned sources make the answer auditable.
+
+## Current verified demo
+
+After ingesting `data/docs`, Qdrant stores 20 points:
+
+```txt
+4 documents -> 20 chunks -> 20 Qdrant records
+```
+
+A question like:
+
+```bash
+bun run ask "what happens when margin falls below maintenance?" 3
+```
+
+retrieves margin/liquidation chunks and returns a grounded answer with source metadata.
 
 ## Next milestones
 
 1. Add ingestion cache so unchanged docs are not re-embedded.
 2. Add RAG eval cases for funding, margin, liquidation, and oracle risk questions.
-3. Add structured JSON answer validation with Zod.
-4. Add tracing/logging for retrieval scores and selected sources.
-5. Add CI workflow for tests and typecheck.
+3. Add section-aware markdown chunking instead of fixed-character chunking.
+4. Add structured JSON answer validation with Zod.
+5. Add tracing/logging for retrieval scores and selected sources.
+6. Add CI workflow for tests and typecheck.
+7. Add streaming answers.
+8. Add a small HTTP API endpoint like `POST /ask`.
