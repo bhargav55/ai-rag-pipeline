@@ -52,9 +52,10 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Prompt builder that combines retrieved context with user input
 - Production OpenAI-compatible chat client
 - End-to-end RAG answer orchestration
+- RAG eval runner for retrieval quality and grounded answer checks
 - Seed perps/risk docs
 - Vitest tests
-- CLI tools for load, retrieve, ingest, and ask
+- CLI tools for load, retrieve, ingest, ask, and eval
 
 ## Stack
 
@@ -212,6 +213,29 @@ Example answer shape:
 }
 ```
 
+Run RAG evals:
+
+```bash
+bun run eval evals/questions.json 3
+```
+
+The eval runner checks two things for each test question:
+
+1. Retrieval quality: did Qdrant return the expected source docs?
+2. Answer grounding: did the LLM answer include required domain terms?
+
+Example eval summary:
+
+```json
+{
+  "summary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0
+  }
+}
+```
+
 ## Checking Qdrant records
 
 Count stored chunks:
@@ -331,13 +355,24 @@ bun run ask "what happens when margin falls below maintenance?" 3
 
 retrieves margin/liquidation chunks and returns a grounded answer with source metadata.
 
+RAG evals are also verified:
+
+```bash
+bun run eval evals/questions.json 3
+```
+
+Current result:
+
+```txt
+4 eval cases -> 4 passed -> 0 failed
+```
+
 ## Next milestones
 
 1. Add ingestion cache so unchanged docs are not re-embedded.
-2. Add RAG eval cases for funding, margin, liquidation, and oracle risk questions.
-3. Add section-aware markdown chunking instead of fixed-character chunking.
-4. Add structured JSON answer validation with Zod.
-5. Add tracing/logging for retrieval scores and selected sources.
-6. Add CI workflow for tests and typecheck.
-7. Add streaming answers.
-8. Add a small HTTP API endpoint like `POST /ask`.
+2. Add section-aware markdown chunking instead of fixed-character chunking.
+3. Add structured JSON answer validation with Zod.
+4. Add tracing/logging for retrieval scores and selected sources.
+5. Add CI workflow for tests and typecheck.
+6. Add streaming answers.
+7. Add a small HTTP API endpoint like `POST /ask`.

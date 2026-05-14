@@ -9,6 +9,7 @@
     "retrieve": "bun run src/cli/retrieve.ts",
     "ingest": "bun run src/cli/ingest.ts",
     "ask": "bun run src/cli/ask.ts",
+    "eval": "bun run src/cli/eval.ts",
     "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
     "typecheck": "tsc --noEmit"
   },

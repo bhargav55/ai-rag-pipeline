@@ -1,0 +1,26 @@
+[
+  {
+    "id": "maintenance-margin-liquidation",
+    "question": "what happens when margin falls below maintenance?",
+    "expectedSources": ["perps/margin.md", "risk/liquidation.md"],
+    "mustMention": ["maintenance margin", "liquidation", "account equity"]
+  },
+  {
+    "id": "funding-payments",
+    "question": "how do funding payments work?",
+    "expectedSources": ["perps/funding.md"],
+    "mustMention": ["funding payments", "longs", "shorts"]
+  },
+  {
+    "id": "oracle-staleness",
+    "question": "what happens if oracle prices are stale?",
+    "expectedSources": ["risk/oracle.txt"],
+    "mustMention": ["stale", "oracle", "liquidation"]
+  },
+  {
+    "id": "initial-vs-maintenance-margin",
+    "question": "what is the difference between initial margin and maintenance margin?",
+    "expectedSources": ["perps/margin.md"],
+    "mustMention": ["initial margin", "maintenance margin", "open"]
+  }
+]
