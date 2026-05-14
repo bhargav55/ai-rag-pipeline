@@ -2,6 +2,27 @@ import { describe, expect, it } from "vitest";
 import { OpenAIChatClient } from "../src/llm/openai-chat";
 
 describe("OpenAIChatClient", () => {
+  it("uses gpt-5.5 as the default chat model", async () => {
+    const previousModel = Bun.env.CHAT_MODEL;
+    delete Bun.env.CHAT_MODEL;
+    const calls: unknown[] = [];
+    const client = new OpenAIChatClient({
+      apiKey: "test-key",
+      fetchFn: async (_url, init) => {
+        calls.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ choices: [{ message: { content: "answer" } }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    });
+
+    await client.answer({ system: "system", user: "user" });
+
+    expect(calls).toMatchObject([{ model: "gpt-5.5" }]);
+    if (previousModel) Bun.env.CHAT_MODEL = previousModel;
+  });
+
   it("calls OpenAI-compatible chat completions API", async () => {
     const calls: unknown[] = [];
     const client = new OpenAIChatClient({

@@ -19,7 +19,7 @@ export class OpenAIChatClient implements LlmClient {
 
   constructor(options: OpenAIChatClientOptions = {}) {
     this.apiKey = options.apiKey ?? Bun.env.OPENAI_API_KEY ?? "";
-    this.model = options.model ?? Bun.env.CHAT_MODEL ?? "gpt-4o-mini";
+    this.model = options.model ?? Bun.env.CHAT_MODEL ?? "gpt-5.5";
     this.baseUrl = options.baseUrl ?? Bun.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
     this.fetchFn = options.fetchFn ?? fetch;
 

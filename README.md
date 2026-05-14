@@ -80,7 +80,7 @@ Set OpenAI-compatible API config:
 export OPENAI_API_KEY=***
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
-export CHAT_MODEL=gpt-4o-mini
+export CHAT_MODEL=gpt-5.5
 ```
 
 ## Commands
