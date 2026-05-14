@@ -1,1 +1,25 @@
-Oracle risk appears when price feeds are stale, manipulated, unavailable, or inconsistent across venues. Perps protocols usually combine freshness checks, confidence bounds, and circuit breakers.
+Oracle risk appears when price feeds are stale, manipulated, unavailable, or inconsistent across venues. Perpetual futures protocols depend on oracle data for mark price, margin checks, liquidation eligibility, funding rates, and settlement.
+
+A stale oracle is a price feed that has not updated within the protocol's allowed freshness window. If the market moves sharply but the oracle remains old, the risk engine may calculate incorrect account equity. This can allow insolvent traders to avoid liquidation or solvent traders to be liquidated unfairly.
+
+Oracle manipulation happens when an attacker can influence the reported price. This is especially dangerous when the protocol uses a thin-liquidity spot market, a single exchange price, or an on-chain AMM TWAP with low liquidity. Manipulated prices can distort PnL, funding payments, collateral valuation, and liquidation price.
+
+Production systems usually combine multiple protections:
+
+- freshness checks that reject old prices
+- confidence interval checks from oracle providers
+- max deviation checks against secondary venues
+- circuit breakers for extreme price moves
+- fallback prices when the primary feed fails
+- delayed settlement or reduce-only mode during oracle incidents
+- governance or guardian controls for emergency market pause
+
+Confidence bounds are important because some oracle providers report both a price and an uncertainty range. If the confidence interval is too wide, the protocol should treat the price as unsafe. A wide confidence interval often means markets are volatile or liquidity is poor.
+
+Circuit breakers protect the system when prices move outside expected bounds. For example, if a price changes by more than 20% in one update, the protocol may pause new positions, force reduce-only mode, or require additional confirmation before using the price for liquidation.
+
+Different protocol components must use prices consistently. If funding uses index price, PnL uses mark price, and liquidation uses last trade price, attackers may find mismatches. A common security issue is when one path uses a safer price while another path uses a manipulable price.
+
+Oracle outages require explicit behavior. The protocol should define whether users can open new positions, close positions, withdraw collateral, or be liquidated while the oracle is unavailable. Failing open can create bad debt. Failing closed can trap users during volatility.
+
+For RAG answers, oracle context should be retrieved when users ask about stale prices, mark price safety, liquidation fairness, funding manipulation, or circuit breakers. Good answers should identify the oracle failure mode and connect it to the affected risk-engine path.
