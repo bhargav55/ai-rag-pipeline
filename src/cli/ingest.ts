@@ -3,6 +3,50 @@ import { chunkDocument } from "../chunker";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
 import { PgVectorStore } from "../stores/pg-vector-store";
+import { QdrantVectorStore } from "../stores/qdrant-vector-store";
+import type { EmbeddedChunk } from "../types";
+
+type IngestStore = {
+  name: "qdrant" | "pgvector";
+  upsertMany(chunks: EmbeddedChunk[]): Promise<void>;
+  close(): Promise<void>;
+};
+
+const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
+
+const createStore = async (): Promise<IngestStore> => {
+  const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
+
+  if (vectorStore === "pgvector") {
+    if (!Bun.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
+    }
+    const db = postgres(Bun.env.DATABASE_URL);
+    return {
+      name: "pgvector",
+      upsertMany: (chunks) => new PgVectorStore(db).upsertMany(chunks),
+      close: () => db.end(),
+    };
+  }
+
+  if (vectorStore !== "qdrant") {
+    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant or pgvector.`);
+  }
+
+  const store = new QdrantVectorStore({
+    url: Bun.env.QDRANT_URL ?? "http://localhost:6333",
+    collection: Bun.env.QDRANT_COLLECTION ?? "protocol_docs",
+    dimension: embeddingDimension(),
+    apiKey: Bun.env.QDRANT_API_KEY,
+  });
+  await store.ensureCollection();
+
+  return {
+    name: "qdrant",
+    upsertMany: (chunks) => store.upsertMany(chunks),
+    close: async () => {},
+  };
+};
 
 const main = async () => {
   const [docsDir] = Bun.argv.slice(2);
@@ -10,13 +54,9 @@ const main = async () => {
     console.error("Usage: bun run ingest <docs-dir>");
     process.exit(1);
   }
-  if (!Bun.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required for pgvector ingestion");
-  }
 
-  const db = postgres(Bun.env.DATABASE_URL);
   const embeddingClient = new OpenAIEmbeddingClient();
-  const store = new PgVectorStore(db);
+  const store = await createStore();
 
   const documents = await loadDocuments(docsDir);
   const chunks = documents.flatMap((doc) => chunkDocument(doc, { maxChars: 800, overlapChars: 120 }));
@@ -24,7 +64,7 @@ const main = async () => {
   const embeddedChunks = chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
 
   await store.upsertMany(embeddedChunks);
-  await db.end();
+  await store.close();
 
   console.log(
     JSON.stringify(
@@ -32,7 +72,7 @@ const main = async () => {
         docsDir,
         documents: documents.length,
         chunks: embeddedChunks.length,
-        store: "pgvector",
+        store: store.name,
       },
       null,
       2,

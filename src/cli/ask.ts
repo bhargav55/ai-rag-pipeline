@@ -3,6 +3,47 @@ import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { OpenAIChatClient } from "../llm/openai-chat";
 import { answerWithRag } from "../rag";
 import { PgVectorStore } from "../stores/pg-vector-store";
+import { QdrantVectorStore } from "../stores/qdrant-vector-store";
+import type { VectorSearchStore } from "../types";
+
+type AskStore = {
+  name: "qdrant" | "pgvector";
+  store: VectorSearchStore;
+  close(): Promise<void>;
+};
+
+const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
+
+const createStore = (): AskStore => {
+  const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
+
+  if (vectorStore === "pgvector") {
+    if (!Bun.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
+    }
+    const db = postgres(Bun.env.DATABASE_URL);
+    return {
+      name: "pgvector",
+      store: new PgVectorStore(db),
+      close: () => db.end(),
+    };
+  }
+
+  if (vectorStore !== "qdrant") {
+    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant or pgvector.`);
+  }
+
+  return {
+    name: "qdrant",
+    store: new QdrantVectorStore({
+      url: Bun.env.QDRANT_URL ?? "http://localhost:6333",
+      collection: Bun.env.QDRANT_COLLECTION ?? "protocol_docs",
+      dimension: embeddingDimension(),
+      apiKey: Bun.env.QDRANT_API_KEY,
+    }),
+    close: async () => {},
+  };
+};
 
 const main = async () => {
   const [question, topKArg] = Bun.argv.slice(2);
@@ -10,21 +51,18 @@ const main = async () => {
     console.error("Usage: bun run ask <question> [topK]");
     process.exit(1);
   }
-  if (!Bun.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required for pgvector RAG answers");
-  }
 
-  const db = postgres(Bun.env.DATABASE_URL);
+  const { store, close, name } = createStore();
   const response = await answerWithRag({
     question,
     embeddingClient: new OpenAIEmbeddingClient(),
-    store: new PgVectorStore(db),
+    store,
     llmClient: new OpenAIChatClient(),
     topK: topKArg ? Number(topKArg) : 3,
   });
-  await db.end();
+  await close();
 
-  console.log(JSON.stringify(response, null, 2));
+  console.log(JSON.stringify({ store: name, ...response }, null, 2));
 };
 
 await main();

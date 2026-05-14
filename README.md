@@ -2,7 +2,7 @@
 
 A production-style TypeScript/Bun RAG pipeline for perps and blockchain protocol documents.
 
-This repo is built as an AI Engineer interview artifact: clean ingestion, citation-ready chunks, OpenAI embeddings, pgvector storage, retrieval, prompt construction, and LLM answers with sources.
+This repo is built as an AI Engineer interview artifact: clean ingestion, citation-ready chunks, OpenAI embeddings, Qdrant vector DB storage, retrieval, prompt construction, and LLM answers with sources.
 
 ## Current pipeline
 
@@ -11,7 +11,7 @@ Protocol Docs
 -> Loader
 -> Chunker
 -> OpenAI Embeddings
--> pgvector
+-> Qdrant Vector DB
 -> Retriever
 -> Prompt Builder
 -> OpenAI Chat Model
@@ -30,7 +30,8 @@ Protocol Docs
   - `domain`
 - Fixed-size overlapping chunks
 - Production OpenAI-compatible embeddings client
-- pgvector schema and store
+- Qdrant vector database store
+- pgvector store kept as a Postgres-backed alternative
 - In-memory vector store kept for tests/simple demos
 - Retriever that embeds the user query and returns top-k matching chunks
 - Prompt builder that combines retrieved context with user input
@@ -46,7 +47,8 @@ Protocol Docs
 - Bun
 - Vitest
 - Zod
-- Postgres + pgvector
+- Qdrant vector database
+- Optional Postgres + pgvector backend
 - OpenAI-compatible embeddings/chat APIs
 
 ## Setup
@@ -57,18 +59,25 @@ Install dependencies:
 bun install
 ```
 
-Start local pgvector Postgres:
+Start local Qdrant vector DB:
 
 ```bash
-docker compose up -d
-export DATABASE_URL=postgres://rag:rag@localhost:5432/rag
-bun run db:schema
+docker compose up -d qdrant
+```
+
+Set vector DB config:
+
+```bash
+export VECTOR_STORE=qdrant
+export QDRANT_URL=http://localhost:6333
+export QDRANT_COLLECTION=protocol_docs
+export EMBEDDING_DIMENSION=1536
 ```
 
 Set OpenAI-compatible API config:
 
 ```bash
-export OPENAI_API_KEY=your_api_key
+export OPENAI_API_KEY=***
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
 export CHAT_MODEL=gpt-4o-mini
@@ -94,19 +103,19 @@ Load docs without embeddings:
 bun run load data/docs
 ```
 
-One-shot retrieval without pgvector persistence:
+One-shot retrieval without vector DB persistence:
 
 ```bash
 bun run retrieve data/docs "what happens when margin falls below maintenance?" 2
 ```
 
-Ingest docs into pgvector:
+Ingest docs into Qdrant:
 
 ```bash
 bun run ingest data/docs
 ```
 
-Ask a full RAG question using pgvector + LLM answer generation:
+Ask a full RAG question using Qdrant + LLM answer generation:
 
 ```bash
 bun run ask "what happens when margin falls below maintenance?" 3
@@ -116,6 +125,7 @@ Example answer shape:
 
 ```json
 {
+  "store": "qdrant",
   "answer": "Liquidation happens when account equity falls below maintenance margin [1].",
   "sources": [
     {
@@ -127,9 +137,22 @@ Example answer shape:
 }
 ```
 
+## Optional pgvector backend
+
+Qdrant is the default separate vector database. If you want the Postgres-backed alternative:
+
+```bash
+docker compose up -d postgres
+export VECTOR_STORE=pgvector
+export DATABASE_URL=postgres://rag:***@localhost:5432/rag
+bun run db:schema
+bun run ingest data/docs
+bun run ask "what happens when margin falls below maintenance?" 3
+```
+
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks them with citation metadata, creates production OpenAI embeddings, stores vectors in pgvector, retrieves top-k context for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks them with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search.
 
 ## Next milestones
 
