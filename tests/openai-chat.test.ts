@@ -47,7 +47,6 @@ describe("OpenAIChatClient", () => {
           { role: "system", content: "system" },
           { role: "user", content: "user" },
         ],
-        temperature: 0.1,
       },
     ]);
   });

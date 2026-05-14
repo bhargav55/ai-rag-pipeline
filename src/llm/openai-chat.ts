@@ -41,7 +41,6 @@ export class OpenAIChatClient implements LlmClient {
           { role: "system", content: prompt.system },
           { role: "user", content: prompt.user },
         ],
-        temperature: 0.1,
       }),
     });
 
