@@ -45,6 +45,10 @@ const vectorFromResult = (vector: QdrantSearchPoint["vector"]): number[] => {
   return [];
 };
 
+type QdrantRequestInit = RequestInit & {
+  okStatuses?: number[];
+};
+
 export class QdrantVectorStore implements VectorSearchStore {
   private readonly baseUrl: string;
   private readonly collection: string;
@@ -69,6 +73,7 @@ export class QdrantVectorStore implements VectorSearchStore {
           distance: "Cosine",
         },
       }),
+      okStatuses: [200, 409],
     });
   }
 
@@ -120,22 +125,24 @@ export class QdrantVectorStore implements VectorSearchStore {
     });
   }
 
-  private async request<T = unknown>(path: string, init: RequestInit): Promise<T> {
+  private async request<T = unknown>(path: string, init: QdrantRequestInit): Promise<T> {
+    const { okStatuses, ...requestInit } = init;
     const headers: Record<string, string> = {
       "content-type": "application/json",
-      ...(init.headers as Record<string, string> | undefined),
+      ...(requestInit.headers as Record<string, string> | undefined),
     };
     if (this.apiKey) headers["api-key"] = this.apiKey;
 
     const response = await this.fetchFn(`${this.baseUrl}${path}`, {
-      ...init,
+      ...requestInit,
       headers,
     });
 
     const text = await response.text();
     const body = text ? JSON.parse(text) : undefined;
 
-    if (!response.ok) {
+    const allowedStatuses = okStatuses ?? [];
+    if (!response.ok && !allowedStatuses.includes(response.status)) {
       throw new Error(`Qdrant API error ${response.status}: ${text}`);
     }
 

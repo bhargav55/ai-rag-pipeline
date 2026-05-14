@@ -53,6 +53,25 @@ describe("QdrantVectorStore", () => {
     });
   });
 
+  it("treats an already-existing collection as successful", async () => {
+    const fake = new FakeFetch();
+    fake.fetch = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+      fake.calls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ status: { error: "Wrong input: Collection `protocol_docs` already exists!" } }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const store = new QdrantVectorStore({
+      url: "http://localhost:6333",
+      collection: "protocol_docs",
+      dimension: 1536,
+      fetch: fake.fetch,
+    });
+
+    await expect(store.ensureCollection()).resolves.toBeUndefined();
+  });
+
   it("upserts embedded chunks as Qdrant points with chunk metadata payload", async () => {
     const fake = new FakeFetch();
     const store = new QdrantVectorStore({
