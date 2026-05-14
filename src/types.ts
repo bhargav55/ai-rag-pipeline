@@ -33,3 +33,16 @@ export type SearchResult = {
 export type EmbeddingClient = {
   embed(input: string[]): Promise<number[][]>;
 };
+
+export type VectorSearchStore = {
+  search(queryEmbedding: number[], topK: number): Promise<SearchResult[]> | SearchResult[];
+};
+
+export type LlmPrompt = {
+  system: string;
+  user: string;
+};
+
+export type LlmClient = {
+  answer(prompt: LlmPrompt): Promise<string>;
+};

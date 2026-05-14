@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { PgVectorStore } from "../src/stores/pg-vector-store";
+import type { EmbeddedChunk } from "../src/types";
+
+class FakeDb {
+  calls: Array<{ sql: string; params: unknown[] }> = [];
+  rows: unknown[] = [];
+
+  async unsafe<T extends unknown[]>(sql: string, params: unknown[] = []): Promise<T> {
+    this.calls.push({ sql, params });
+    return this.rows as T;
+  }
+}
+
+const embeddedChunk: EmbeddedChunk = {
+  id: "perps/funding.md#chunk-0",
+  sourcePath: "perps/funding.md",
+  domain: "perps",
+  index: 0,
+  text: "Funding keeps perp prices aligned with spot.",
+  embedding: [0.1, 0.2, 0.3],
+};
+
+describe("PgVectorStore", () => {
+  it("upserts embedded chunks with metadata and pgvector string", async () => {
+    const db = new FakeDb();
+    const store = new PgVectorStore(db);
+
+    await store.upsertMany([embeddedChunk]);
+
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0].sql).toContain("insert into rag_chunks");
+    expect(db.calls[0].sql).toContain("on conflict (id) do update");
+    expect(db.calls[0].params).toEqual([
+      embeddedChunk.id,
+      embeddedChunk.sourcePath,
+      embeddedChunk.domain,
+      embeddedChunk.index,
+      embeddedChunk.text,
+      "[0.1,0.2,0.3]",
+    ]);
+  });
+
+  it("searches pgvector with cosine distance and returns scored chunks", async () => {
+    const db = new FakeDb();
+    db.rows = [
+      {
+        id: "risk/liquidation.md#chunk-0",
+        source_path: "risk/liquidation.md",
+        domain: "risk",
+        chunk_index: 0,
+        text: "Liquidation happens below maintenance margin.",
+        embedding: "[0.2,0.8]",
+        score: 0.91,
+      },
+    ];
+    const store = new PgVectorStore(db);
+
+    const results = await store.search([0.2, 0.8], 1);
+
+    expect(db.calls[0].sql).toContain("order by embedding <=> $1::vector");
+    expect(db.calls[0].params).toEqual(["[0.2,0.8]", 1]);
+    expect(results).toEqual([
+      {
+        score: 0.91,
+        chunk: {
+          id: "risk/liquidation.md#chunk-0",
+          sourcePath: "risk/liquidation.md",
+          domain: "risk",
+          index: 0,
+          text: "Liquidation happens below maintenance margin.",
+          embedding: [0.2, 0.8],
+        },
+      },
+    ]);
+  });
+});

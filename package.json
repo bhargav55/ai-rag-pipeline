@@ -7,6 +7,9 @@
     "test": "vitest run",
     "load": "bun run src/cli/load.ts",
     "retrieve": "bun run src/cli/retrieve.ts",
+    "ingest": "bun run src/cli/ingest.ts",
+    "ask": "bun run src/cli/ask.ts",
+    "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
@@ -15,6 +18,7 @@
     "vitest": "latest"
   },
   "dependencies": {
+    "postgres": "^3.4.9",
     "zod": "latest"
   }
 }
