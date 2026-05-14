@@ -53,9 +53,11 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Production OpenAI-compatible chat client
 - End-to-end RAG answer orchestration
 - RAG eval runner for retrieval quality and grounded answer checks
+- Ragas framework eval stack for faithfulness, answer relevancy, context precision, and context recall
 - Seed perps/risk docs
 - Vitest tests
 - CLI tools for load, retrieve, ingest, ask, and eval
+- Python/uv Ragas evaluator for framework-based RAG metrics
 
 ## Stack
 
@@ -66,6 +68,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Qdrant vector database
 - Optional Postgres + pgvector backend
 - OpenAI-compatible embeddings/chat APIs
+- Ragas for mature RAG evaluation metrics
 
 ## Models and retrieval config
 
@@ -213,16 +216,16 @@ Example answer shape:
 }
 ```
 
-Run RAG evals:
+Run deterministic RAG evals:
 
 ```bash
 bun run eval evals/questions.json 3
 ```
 
-The eval runner checks two things for each test question:
+The deterministic eval runner checks two things for each test question:
 
 1. Retrieval quality: did Qdrant return the expected source docs?
-2. Answer grounding: did the LLM answer include required domain terms?
+2. Answer grounding sanity: did the LLM answer include required domain terms?
 
 Example eval summary:
 
@@ -235,6 +238,29 @@ Example eval summary:
   }
 }
 ```
+
+Run Ragas framework evals:
+
+```bash
+bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
+bun run eval:ragas
+```
+
+The Ragas stack exports the real RAG outputs into JSONL rows with:
+
+- `user_input`
+- `response`
+- `retrieved_contexts`
+- `reference`
+
+Then the Python Ragas runner scores:
+
+- faithfulness
+- answer relevancy
+- context precision
+- context recall
+
+The production answer model can remain `gpt-5.5`. The Ragas judge model defaults to `gpt-4o-mini` via `RAGAS_LLM_MODEL` because Ragas/LangChain may set low temperature internally, and newer GPT-5.5 APIs reject non-default temperature values.
 
 ## Checking Qdrant records
 
@@ -331,7 +357,7 @@ bun run ask "what happens when margin falls below maintenance?" 3
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks all documents with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks all documents with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals plus a Ragas framework evaluator for faithfulness, answer relevancy, context precision, and context recall.
 
 Important distinction:
 
@@ -361,10 +387,26 @@ RAG evals are also verified:
 bun run eval evals/questions.json 3
 ```
 
-Current result:
+Current deterministic result:
 
 ```txt
 4 eval cases -> 4 passed -> 0 failed
+```
+
+Ragas framework evals are also wired and verified:
+
+```bash
+bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
+bun run eval:ragas
+```
+
+Latest Ragas report was generated with 4 rows and these metrics:
+
+```txt
+faithfulness
+answer_relevancy
+llm_context_precision_without_reference
+context_recall
 ```
 
 ## Next milestones

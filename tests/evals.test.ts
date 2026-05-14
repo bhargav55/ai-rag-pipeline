@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateRag, summarizeEvalResults } from "../src/evals";
+import { evaluateRag, summarizeEvalResults, toRagasRows } from "../src/evals";
 import type { EmbeddedChunk, EmbeddingClient, LlmClient, LlmPrompt, SearchResult, VectorSearchStore } from "../src/types";
 
 const chunk = (sourcePath: string, id: string, text: string): EmbeddedChunk => ({
@@ -42,6 +42,7 @@ describe("evaluateRag", () => {
           question: "what happens when margin falls below maintenance?",
           expectedSources: ["perps/margin.md", "risk/liquidation.md"],
           mustMention: ["maintenance margin", "liquidation", "account equity"],
+          reference: "When account equity falls below maintenance margin, the position becomes eligible for liquidation.",
         },
       ],
       topK: 3,
@@ -68,6 +69,8 @@ describe("evaluateRag", () => {
         mustMention: ["maintenance margin", "liquidation", "account equity"],
         missingTerms: [],
         answer: "Account equity below maintenance margin triggers liquidation.",
+        contexts: ["maintenance margin", "liquidation"],
+        reference: "When account equity falls below maintenance margin, the position becomes eligible for liquidation.",
       },
     ]);
   });
@@ -80,6 +83,7 @@ describe("evaluateRag", () => {
           question: "what happens if oracle prices are stale?",
           expectedSources: ["risk/oracle.txt"],
           mustMention: ["stale", "oracle", "circuit breaker"],
+          reference: "Stale oracle prices can cause incorrect margin checks and liquidation decisions.",
         },
       ],
       topK: 1,
@@ -99,6 +103,8 @@ describe("evaluateRag", () => {
       missingSources: ["risk/oracle.txt"],
         missingTerms: ["stale", "oracle", "circuit breaker"],
         answer: "Funding payments transfer between longs and shorts.",
+        contexts: ["funding"],
+        reference: "Stale oracle prices can cause incorrect margin checks and liquidation decisions.",
     });
   });
 });
@@ -107,9 +113,41 @@ describe("summarizeEvalResults", () => {
   it("summarizes total, passed, and failed counts", () => {
     expect(
       summarizeEvalResults([
-        { id: "a", question: "q", passed: true, retrievalPassed: true, answerPassed: true, expectedSources: [], actualSources: [], missingSources: [], mustMention: [], missingTerms: [], answer: "ok" },
-        { id: "b", question: "q", passed: false, retrievalPassed: false, answerPassed: true, expectedSources: [], actualSources: [], missingSources: [], mustMention: [], missingTerms: [], answer: "no" },
+        { id: "a", question: "q", passed: true, retrievalPassed: true, answerPassed: true, expectedSources: [], actualSources: [], missingSources: [], mustMention: [], missingTerms: [], answer: "ok", contexts: [], reference: "ok" },
+        { id: "b", question: "q", passed: false, retrievalPassed: false, answerPassed: true, expectedSources: [], actualSources: [], missingSources: [], mustMention: [], missingTerms: [], answer: "no", contexts: [], reference: "no" },
       ]),
     ).toEqual({ total: 2, passed: 1, failed: 1 });
+  });
+});
+
+describe("toRagasRows", () => {
+  it("converts eval results into Ragas-compatible rows", () => {
+    expect(
+      toRagasRows([
+        {
+          id: "case-1",
+          question: "what happens when margin falls below maintenance?",
+          passed: true,
+          retrievalPassed: true,
+          answerPassed: true,
+          expectedSources: ["perps/margin.md"],
+          actualSources: ["perps/margin.md"],
+          missingSources: [],
+          mustMention: ["liquidation"],
+          missingTerms: [],
+          answer: "The account can be liquidated.",
+          contexts: ["Maintenance margin text"],
+          reference: "Accounts below maintenance margin become liquidatable.",
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "case-1",
+        user_input: "what happens when margin falls below maintenance?",
+        response: "The account can be liquidated.",
+        retrieved_contexts: ["Maintenance margin text"],
+        reference: "Accounts below maintenance margin become liquidatable.",
+      },
+    ]);
   });
 });

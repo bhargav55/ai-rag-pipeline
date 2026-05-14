@@ -3,24 +3,28 @@
     "id": "maintenance-margin-liquidation",
     "question": "what happens when margin falls below maintenance?",
     "expectedSources": ["perps/margin.md", "risk/liquidation.md"],
-    "mustMention": ["maintenance margin", "liquidation", "account equity"]
+    "mustMention": ["maintenance margin", "liquidation", "account equity"],
+    "reference": "When account equity falls below the maintenance margin requirement, the account becomes eligible for liquidation. Liquidation closes or reduces positions so losses do not exceed collateral."
   },
   {
     "id": "funding-payments",
     "question": "how do funding payments work?",
     "expectedSources": ["perps/funding.md"],
-    "mustMention": ["funding payments", "longs", "shorts"]
+    "mustMention": ["funding payments", "longs", "shorts"],
+    "reference": "Funding payments are periodic transfers between longs and shorts that help keep the perpetual futures price close to spot. Positive funding usually means longs pay shorts; negative funding usually means shorts pay longs."
   },
   {
     "id": "oracle-staleness",
     "question": "what happens if oracle prices are stale?",
     "expectedSources": ["risk/oracle.txt"],
-    "mustMention": ["stale", "oracle", "liquidation"]
+    "mustMention": ["stale", "oracle", "liquidation"],
+    "reference": "If oracle prices are stale, the risk engine can compute incorrect account equity, margin checks, funding, and liquidation eligibility. This can let insolvent traders avoid liquidation or cause unfair liquidations."
   },
   {
     "id": "initial-vs-maintenance-margin",
     "question": "what is the difference between initial margin and maintenance margin?",
     "expectedSources": ["perps/margin.md"],
-    "mustMention": ["initial margin", "maintenance margin", "open"]
+    "mustMention": ["initial margin", "maintenance margin", "open"],
+    "reference": "Initial margin is the collateral required to open or increase a position. Maintenance margin is the minimum collateral required to keep an already-open position from becoming eligible for liquidation."
   }
 ]

@@ -6,3 +6,6 @@ coverage/
 .venv/
 __pycache__/
 tests/.tmp/
+evals/ragas-dataset.jsonl
+evals/ragas-report.json
+evals/ragas/.venv/
