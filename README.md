@@ -146,6 +146,7 @@ A Railway-hosted Qdrant service is available for production-style demos:
 - Public URL: `https://qdrant-production-b4b4.up.railway.app`
 - Persistent volume mount: `/qdrant/storage`
 - Qdrant API key is configured on Railway as `QDRANT__SERVICE__API_KEY`
+- Railway public routing uses `PORT=6333` and `QDRANT__SERVICE__HOST=0.0.0.0`
 
 Use the hosted vector DB from this app:
 
