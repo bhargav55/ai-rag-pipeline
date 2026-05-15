@@ -15,7 +15,9 @@ Protocol Docs
 -> Retriever
 -> Prompt Builder
 -> OpenAI Chat Model
+-> Zod Validation
 -> Answer with Sources
+-> Structured Trace Log
 ```
 
 ## What this demonstrates
@@ -55,6 +57,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - End-to-end RAG answer orchestration
 - Zod-validated structured LLM answers with confidence, citations, and missing-context flags
 - HTTP API with `POST /ask` and `GET /healthz`
+- Structured RAG tracing/logging with request IDs, retrieval metadata, stage timings, and error events
 - RAG eval runner for retrieval quality and grounded answer checks
 - Ragas-compatible JSONL export for framework-based RAG quality evaluation
 - Seed perps/risk docs
@@ -226,6 +229,7 @@ Example answer shape:
 ```json
 {
   "store": "qdrant",
+  "traceId": "7b8717f5-9d3e-4ea7-8c6b-a5cf7a4515a3",
   "answer": "When account equity falls below the maintenance margin requirement, the position becomes eligible for liquidation [1].",
   "confidence": "high",
   "citations": [
@@ -248,6 +252,42 @@ Example answer shape:
   ]
 }
 ```
+
+Structured tracing/logging:
+
+Each `bun run ask` and `POST /ask` call emits one JSON trace event to stderr. HTTP requests reuse the `x-request-id` header when present; otherwise the server generates a UUID. The same ID is returned in the API response as `traceId`, so app responses can be matched to logs.
+
+Successful requests emit `rag.answer.completed`. Failed RAG calls emit `rag.answer.failed` with a redacted-safe error name/message.
+
+Example trace event:
+
+```json
+{
+  "event": "rag.answer.completed",
+  "requestId": "7b8717f5-9d3e-4ea7-8c6b-a5cf7a4515a3",
+  "question": "what happens when margin falls below maintenance?",
+  "topK": 3,
+  "model": "gpt-5.5",
+  "retrievedChunks": [
+    {
+      "chunkId": "perps/margin.md#section-margin-requirements-chunk-0",
+      "sourcePath": "perps/margin.md",
+      "headingPath": ["Margin", "Requirements"],
+      "score": 0.5373063
+    }
+  ],
+  "timingsMs": {
+    "embedding": 82,
+    "vectorSearch": 34,
+    "promptBuild": 1,
+    "llm": 1640,
+    "validation": 2,
+    "total": 1759
+  }
+}
+```
+
+The trace is intentionally operational: request ID, question, `topK`, chat model, retrieved source chunks, optional heading paths, similarity scores, per-stage latency, and errors. It does not log API keys or vector database credentials.
 
 Run deterministic RAG evals:
 

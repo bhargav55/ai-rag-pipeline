@@ -3,6 +3,7 @@ import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { handleHttpRequest } from "../http-server";
 import { OpenAIChatClient } from "../llm/openai-chat";
 import { answerWithRag } from "../rag";
+import { createConsoleJsonTracer } from "../rag-tracing";
 import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { VectorSearchStore } from "../types";
@@ -51,6 +52,7 @@ const port = Number(Bun.env.PORT ?? "3000");
 Bun.serve({
   port,
   async fetch(request) {
+    const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
     return handleHttpRequest(request, {
       async answer({ question, topK }) {
         const { store, close, name } = createStore();
@@ -61,6 +63,7 @@ Bun.serve({
             store,
             llmClient: new OpenAIChatClient(),
             topK,
+            trace: createConsoleJsonTracer({ requestId, model: Bun.env.CHAT_MODEL ?? "gpt-5.5" }),
           });
 
           return { store: name, ...response };
