@@ -60,6 +60,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Structured RAG tracing/logging with request IDs, retrieval metadata, stage timings, and error events
 - JSON logger with log levels, timestamps, and secret-field redaction
 - RAG eval runner for retrieval quality and grounded answer checks
+- Judge-based RAG eval scoring for faithfulness, relevance, citation correctness, and rationale
 - Ragas-compatible JSONL export for framework-based RAG quality evaluation
 - Seed perps/risk docs
 - Protocol-specific configuration docs for margin ratios, fees, liquidator incentives, and leverage limits
@@ -329,9 +330,48 @@ Example eval summary:
 ```json
 {
   "summary": {
-    "total": 4,
-    "passed": 4,
+    "total": 5,
+    "passed": 5,
     "failed": 0
+  }
+}
+```
+
+Run judge-based RAG evals:
+
+```bash
+bun run eval:judge evals/questions.json 3
+```
+
+The judge eval command first runs the deterministic eval path, then sends each question, retrieved context, generated answer, and reference answer to a judge model. The judge returns structured JSON with:
+
+- `faithfulness`: whether the answer stays inside retrieved context
+- `relevance`: whether the answer directly addresses the question
+- `citationCorrectness`: whether cited context supports the answer
+- `passed`: true only when all judge scores are strong enough
+- `rationale`: concise explanation for debugging
+
+Use deterministic evals as the small fast smoke suite. Use judge evals when you want semantic quality scoring without hand-writing exact wording for every acceptable answer. Keep adding eval cases from real user-flagged wrong answers.
+
+Optional judge model override:
+
+```bash
+export JUDGE_MODEL=gpt-5.5
+```
+
+Example judge summary:
+
+```json
+{
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "averages": {
+      "faithfulness": 0.92,
+      "relevance": 0.9,
+      "citationCorrectness": 0.96
+    }
   }
 }
 ```
@@ -377,7 +417,7 @@ Expected count after deleting the collection and running a fresh ingest of the c
 ```json
 {
   "result": {
-    "count": 27
+    "count": 32
   },
   "status": "ok"
 }
@@ -455,7 +495,7 @@ bun run ask "what are the protocol maintenance margin ratio, fees, and leverage 
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals plus Ragas-compatible JSONL export for semantic evaluation workflows.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
 
 Important distinction:
 
@@ -479,10 +519,11 @@ bun run ask "what are the protocol maintenance margin ratio, fees, and leverage 
 
 retrieves protocol configuration chunks and returns a grounded answer with exact source metadata.
 
-RAG evals include this protocol-specific config case:
+RAG evals include this protocol-specific config case and can also be judged semantically:
 
 ```bash
 bun run eval evals/questions.json 3
+bun run eval:judge evals/questions.json 3
 ```
 
 Expected deterministic result after ingesting the current corpus:
