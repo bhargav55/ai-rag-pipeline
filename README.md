@@ -62,6 +62,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - RAG eval runner for retrieval quality and grounded answer checks
 - Ragas-compatible JSONL export for framework-based RAG quality evaluation
 - Seed perps/risk docs
+- Protocol-specific configuration docs for margin ratios, fees, liquidator incentives, and leverage limits
 - Vitest tests
 - CLI tools for load, retrieve, ingest, ask, and eval
 
@@ -166,12 +167,31 @@ Expected output for the current seed docs:
 ```json
 {
   "docsDir": "data/docs",
-  "documents": 4,
-  "chunks": 27
+  "documents": 5,
+  "chunks": 32
 }
 ```
 
 One-shot retrieval without vector DB persistence:
+
+```bash
+bun run retrieve data/docs "what is this protocol's maintenance margin ratio and fee schedule?" 3
+```
+
+This is intentionally protocol-specific. The seed corpus includes `data/docs/protocol/configuration.md`, which defines baseline parameters that generic model pretraining should not guess:
+
+```txt
+maintenance margin ratio = 6%
+maker fee = 0.01%
+taker fee = 0.05%
+liquidator fee = 1.00%
+maximum leverage = 10x
+minimum leverage = 1x
+```
+
+Generic perps knowledge is useful background, but answers about these parameters should be grounded in the protocol configuration doc.
+
+You can also test the older generic margin question:
 
 ```bash
 bun run retrieve data/docs "what happens when margin falls below maintenance?" 2
@@ -188,8 +208,8 @@ Expected output for the current seed docs:
 ```json
 {
   "docsDir": "data/docs",
-  "documents": 4,
-  "chunks": 27,
+  "documents": 5,
+  "chunks": 32,
   "store": "qdrant"
 }
 ```
@@ -197,7 +217,7 @@ Expected output for the current seed docs:
 Ask a full RAG question using Qdrant + LLM answer generation:
 
 ```bash
-bun run ask "what happens when margin falls below maintenance?" 3
+bun run ask "what are the protocol maintenance margin ratio, fees, and leverage limits?" 3
 ```
 
 The final argument is `topK`. For example, `3` means retrieve the top 3 most relevant chunks from Qdrant and pass those chunks to the LLM as context.
@@ -222,7 +242,7 @@ Ask through the API:
 curl -s \
   -X POST http://localhost:3000/ask \
   -H "Content-Type: application/json" \
-  -d '{"question":"what happens when margin falls below maintenance?","topK":3}' | jq
+  -d '{"question":"what are the protocol maintenance margin ratio, fees, and leverage limits?","topK":3}' | jq
 ```
 
 Example answer shape:
@@ -231,7 +251,7 @@ Example answer shape:
 {
   "store": "qdrant",
   "traceId": "7b8717f5-9d3e-4ea7-8c6b-a5cf7a4515a3",
-  "answer": "When account equity falls below the maintenance margin requirement, the position becomes eligible for liquidation [1].",
+  "answer": "The protocol baseline maintenance margin ratio is 6%. The maker fee is 0.01%, the taker fee is 0.05%, the liquidator fee is 1.00%, and baseline leverage ranges from 1x to 10x [1].",
   "confidence": "high",
   "citations": [
     {
@@ -241,13 +261,13 @@ Example answer shape:
   "missingContext": false,
   "sources": [
     {
-      "sourcePath": "perps/margin.md",
-      "chunkId": "perps/margin.md#chunk-1",
+      "sourcePath": "protocol/configuration.md",
+      "chunkId": "protocol/configuration.md#section-risk-parameters-chunk-0",
       "score": 0.5373063
     },
     {
-      "sourcePath": "risk/liquidation.md",
-      "chunkId": "risk/liquidation.md#chunk-0",
+      "sourcePath": "protocol/configuration.md",
+      "chunkId": "protocol/configuration.md#section-fee-parameters-chunk-0",
       "score": 0.5180107
     }
   ]
@@ -387,7 +407,7 @@ curl -s \
 bun run ingest data/docs
 ```
 
-Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 27, not duplicate to 54.
+Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 32, not duplicate to 64.
 
 ## Hosted Qdrant on Railway
 
@@ -410,7 +430,7 @@ export QDRANT_API_KEY=***
 export EMBEDDING_DIMENSION=1536
 
 bun run ingest data/docs
-bun run ask "what happens when margin falls below maintenance?" 3
+bun run ask "what are the protocol maintenance margin ratio, fees, and leverage limits?" 3
 ```
 
 For local development, you can still run Qdrant with Docker:
@@ -430,7 +450,7 @@ export VECTOR_STORE=pgvector
 export DATABASE_URL=postgres://rag:***@localhost:5432/rag
 bun run db:schema
 bun run ingest data/docs
-bun run ask "what happens when margin falls below maintenance?" 3
+bun run ask "what are the protocol maintenance margin ratio, fees, and leverage limits?" 3
 ```
 
 ## Interview framing
@@ -443,46 +463,45 @@ Important distinction:
 - The LLM writes the final answer using those chunks.
 - Returned sources make the answer auditable.
 
-## Current verified demo
+## Current local corpus check
 
-After deleting the collection and freshly ingesting `data/docs`, Qdrant stores 27 points:
+`bun run load data/docs` currently reports 5 documents and 32 section-aware chunks:
 
 ```txt
-4 documents -> 27 section-aware chunks -> 27 Qdrant records after a fresh collection reset
+5 documents -> 32 section-aware chunks
 ```
 
 A question like:
 
 ```bash
-bun run ask "what happens when margin falls below maintenance?" 3
+bun run ask "what are the protocol maintenance margin ratio, fees, and leverage limits?" 3
 ```
 
-retrieves margin/liquidation chunks and returns a grounded answer with source metadata.
+retrieves protocol configuration chunks and returns a grounded answer with exact source metadata.
 
-RAG evals are also verified:
+RAG evals include this protocol-specific config case:
 
 ```bash
 bun run eval evals/questions.json 3
 ```
 
-Current deterministic result:
+Expected deterministic result after ingesting the current corpus:
 
 ```txt
-4 eval cases -> 4 passed -> 0 failed
+5 eval cases -> 5 passed -> 0 failed
 ```
 
-Ragas-compatible eval export is also wired and verified:
+Ragas-compatible eval export is also wired:
 
 ```bash
 bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
 ```
 
-Latest export generated 4 JSONL rows with question, response, retrieved contexts, and reference answer fields.
+The export now generates 5 JSONL rows with question, response, retrieved contexts, and reference answer fields after running against the current corpus.
 
 ## Next milestones
 
-1. Add tracing/logging for retrieval scores and selected sources.
-2. Add deploy config for the HTTP API.
-3. Add ingestion cache so unchanged docs are not re-embedded.
-4. Add CI workflow for tests and typecheck.
-5. Add streaming answers.
+1. Add deploy config for the HTTP API.
+2. Add ingestion cache so unchanged docs are not re-embedded.
+3. Add CI workflow for tests and typecheck.
+4. Add streaming answers.

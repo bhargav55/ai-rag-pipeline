@@ -26,5 +26,12 @@
     "expectedSources": ["perps/margin.md"],
     "mustMention": ["initial margin", "maintenance margin", "open"],
     "reference": "Initial margin is the collateral required to open or increase a position. Maintenance margin is the minimum collateral required to keep an already-open position from becoming eligible for liquidation."
+  },
+  {
+    "id": "protocol-config-fees-and-leverage",
+    "question": "what are this protocol's margin ratio, fees, and leverage limits?",
+    "expectedSources": ["protocol/configuration.md"],
+    "mustMention": ["6%", "0.01%", "0.05%", "1.00%", "10x", "1x"],
+    "reference": "The protocol baseline maintenance margin ratio is 6%. The maker fee is 0.01%, the taker fee is 0.05%, and the liquidator fee is 1.00%. Baseline leverage ranges from 1x to 10x."
   }
 ]
