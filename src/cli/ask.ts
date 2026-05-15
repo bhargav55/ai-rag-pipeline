@@ -2,7 +2,7 @@ import postgres from "postgres";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { OpenAIChatClient } from "../llm/openai-chat";
 import { answerWithRag } from "../rag";
-import { createConsoleJsonTracer } from "../rag-tracing";
+import { createLoggerTracer } from "../rag-tracing";
 import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { VectorSearchStore } from "../types";
@@ -60,7 +60,7 @@ const main = async () => {
     store,
     llmClient: new OpenAIChatClient(),
     topK: topKArg ? Number(topKArg) : 3,
-    trace: createConsoleJsonTracer({ model: Bun.env.CHAT_MODEL ?? "gpt-5.5" }),
+    trace: createLoggerTracer({ model: Bun.env.CHAT_MODEL ?? "gpt-5.5" }),
   });
   await close();
 
