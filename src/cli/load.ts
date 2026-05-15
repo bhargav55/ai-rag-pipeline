@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { chunkDocument } from "../chunker";
 import { loadDocuments } from "../loader";
+import { chunkMarkdownDocument } from "../markdown-section-chunker";
 
 const argsSchema = z.tuple([z.string()]).rest(z.string());
 
@@ -12,7 +12,7 @@ const main = async () => {
   }
 
   const documents = await loadDocuments(docsDir);
-  const chunks = documents.flatMap((doc) => chunkDocument(doc, { maxChars: 800, overlapChars: 120 }));
+  const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
 
   console.log(
     JSON.stringify(

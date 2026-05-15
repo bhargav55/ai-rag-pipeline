@@ -43,7 +43,8 @@ The LLM generates the final answer, grounded by the retrieved chunks.
   - `extension`
   - `sizeBytes`
   - `domain`
-- Fixed-size overlapping chunks
+- Section-aware Markdown chunking with heading-path metadata
+- Fixed-size overlapping chunks for plain text and oversized Markdown sections
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
 - pgvector store kept as a Postgres-backed alternative
@@ -103,7 +104,7 @@ maxChars: 800
 overlapChars: 120
 ```
 
-Meaning each document is split into chunks of up to 800 characters with 120 characters of overlap between neighboring chunks.
+Meaning each Markdown document is first split by headings so chunks preserve section boundaries and heading paths. Oversized sections and plain text files are split into chunks of up to 800 characters with 120 characters of overlap between neighboring chunks.
 
 ## Setup
 
@@ -160,7 +161,7 @@ Expected output for the current seed docs:
 {
   "docsDir": "data/docs",
   "documents": 4,
-  "chunks": 20
+  "chunks": 27
 }
 ```
 
@@ -182,7 +183,7 @@ Expected output for the current seed docs:
 {
   "docsDir": "data/docs",
   "documents": 4,
-  "chunks": 20,
+  "chunks": 27,
   "store": "qdrant"
 }
 ```
@@ -276,12 +277,12 @@ curl -s \
   -d '{"exact": true}' | jq
 ```
 
-Expected count after a fresh ingest of the current seed docs:
+Expected count after deleting the collection and running a fresh ingest of the current seed docs:
 
 ```json
 {
   "result": {
-    "count": 20
+    "count": 27
   },
   "status": "ok"
 }
@@ -369,10 +370,10 @@ Important distinction:
 
 ## Current verified demo
 
-After ingesting `data/docs`, Qdrant stores 20 points:
+After deleting the collection and freshly ingesting `data/docs`, Qdrant stores 27 points:
 
 ```txt
-4 documents -> 20 chunks -> 20 Qdrant records
+4 documents -> 27 section-aware chunks -> 27 Qdrant records after a fresh collection reset
 ```
 
 A question like:

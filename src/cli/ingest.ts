@@ -1,7 +1,7 @@
 import postgres from "postgres";
-import { chunkDocument } from "../chunker";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
+import { chunkMarkdownDocument } from "../markdown-section-chunker";
 import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { EmbeddedChunk } from "../types";
@@ -59,7 +59,7 @@ const main = async () => {
   const store = await createStore();
 
   const documents = await loadDocuments(docsDir);
-  const chunks = documents.flatMap((doc) => chunkDocument(doc, { maxChars: 800, overlapChars: 120 }));
+  const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
   const embeddings = await embeddingClient.embed(chunks.map((chunk) => chunk.text));
   const embeddedChunks = chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
 

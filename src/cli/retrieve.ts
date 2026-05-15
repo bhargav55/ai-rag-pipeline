@@ -1,6 +1,6 @@
-import { chunkDocument } from "../chunker";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
+import { chunkMarkdownDocument } from "../markdown-section-chunker";
 import { buildRetrievalIndex, retrieve } from "../retriever";
 
 const main = async () => {
@@ -12,7 +12,7 @@ const main = async () => {
 
   const topK = topKArg ? Number(topKArg) : 3;
   const documents = await loadDocuments(docsDir);
-  const chunks = documents.flatMap((doc) => chunkDocument(doc, { maxChars: 800, overlapChars: 120 }));
+  const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
   const embeddingClient = new OpenAIEmbeddingClient();
   const index = await buildRetrievalIndex(chunks, embeddingClient);
   const results = await retrieve(index, embeddingClient, query, topK);

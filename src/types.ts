@@ -14,6 +14,7 @@ export type Chunk = {
   domain: string;
   index: number;
   text: string;
+  headingPath?: string[];
 };
 
 export type ChunkOptions = {
