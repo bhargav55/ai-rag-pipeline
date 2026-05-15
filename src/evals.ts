@@ -1,4 +1,5 @@
 import { buildRagPrompt } from "./prompt";
+import { parseStructuredRagAnswer } from "./structured-answer";
 import type { EmbeddingClient, LlmClient, VectorSearchStore } from "./types";
 
 export type RagEvalCase = {
@@ -62,7 +63,8 @@ export const evaluateRag = async ({
     const [queryEmbedding] = await embeddingClient.embed([evalCase.question]);
     const searchResults = await store.search(queryEmbedding, topK);
     const prompt = buildRagPrompt({ question: evalCase.question, results: searchResults });
-    const answer = await llmClient.answer(prompt);
+    const rawAnswer = await llmClient.answer(prompt);
+    const { answer } = parseStructuredRagAnswer(rawAnswer);
 
     const actualSources = [...new Set(searchResults.map((result) => result.chunk.sourcePath))];
     const missingSources = evalCase.expectedSources.filter((source) => !actualSources.includes(source));

@@ -29,7 +29,12 @@ class FakeLlm implements LlmClient {
   constructor(private readonly answerText: string) {}
 
   async answer(_prompt: LlmPrompt) {
-    return this.answerText;
+    return JSON.stringify({
+      answer: this.answerText,
+      confidence: "high",
+      citations: [{ sourceNumber: 1 }],
+      missingContext: false,
+    });
   }
 }
 

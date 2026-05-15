@@ -28,6 +28,8 @@ describe("buildRagPrompt", () => {
     expect(prompt.user).toContain("Question:\nWhen does liquidation happen?");
     expect(prompt.user).toContain("[1] Source: risk/liquidation.md");
     expect(prompt.user).toContain("[2] Source: perps/margin.md");
-    expect(prompt.user).toContain("Cite sources like [1], [2]");
+    expect(prompt.user).toContain("Return only valid JSON");
+    expect(prompt.user).toContain('"confidence": "low" | "medium" | "high"');
+    expect(prompt.user).toContain("Cite sources in the answer like [1], [2]");
   });
 });

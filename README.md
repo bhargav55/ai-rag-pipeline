@@ -53,6 +53,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Prompt builder that combines retrieved context with user input
 - Production OpenAI-compatible chat client
 - End-to-end RAG answer orchestration
+- Zod-validated structured LLM answers with confidence, citations, and missing-context flags
 - RAG eval runner for retrieval quality and grounded answer checks
 - Ragas framework eval stack for faithfulness, answer relevancy, context precision, and context recall
 - Seed perps/risk docs
@@ -196,12 +197,21 @@ bun run ask "what happens when margin falls below maintenance?" 3
 
 The final argument is `topK`. For example, `3` means retrieve the top 3 most relevant chunks from Qdrant and pass those chunks to the LLM as context.
 
+The LLM is instructed to return only valid JSON. The app validates that JSON with Zod before trusting it, so malformed model output fails fast instead of leaking into downstream API responses.
+
 Example answer shape:
 
 ```json
 {
   "store": "qdrant",
   "answer": "When account equity falls below the maintenance margin requirement, the position becomes eligible for liquidation [1].",
+  "confidence": "high",
+  "citations": [
+    {
+      "sourceNumber": 1
+    }
+  ],
+  "missingContext": false,
   "sources": [
     {
       "sourcePath": "perps/margin.md",

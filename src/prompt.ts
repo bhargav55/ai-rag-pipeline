@@ -16,6 +16,6 @@ export const buildRagPrompt = ({ question, results }: BuildRagPromptInput): LlmP
   return {
     system:
       "You are a precise RAG assistant. You must answer only from the provided context. If the context is insufficient, say what is missing. Do not invent facts. Keep the answer concise and cite sources.",
-    user: `Context:\n${context}\n\nQuestion:\n${question}\n\nAnswer rules:\n- Cite sources like [1], [2].\n- Use only the context above.\n- If unsure, say the context is insufficient.`,
+    user: `Context:\n${context}\n\nQuestion:\n${question}\n\nAnswer rules:\n- Return only valid JSON. No markdown fences. No prose outside JSON.\n- JSON shape: {"answer": string, "confidence": "low" | "medium" | "high", "citations": [{"sourceNumber": number}], "missingContext": boolean}.\n- Cite sources in the answer like [1], [2], and include matching source numbers in citations.\n- Use only the context above.\n- If unsure, set missingContext to true and say the context is insufficient.`,
   };
 };

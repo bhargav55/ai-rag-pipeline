@@ -27,12 +27,17 @@ const store: VectorSearchStore = {
 };
 
 describe("answerWithRag", () => {
-  it("retrieves context, builds prompt, and returns LLM answer with sources", async () => {
+  it("retrieves context, builds prompt, validates structured LLM output, and returns sources", async () => {
     const seenPrompts: Array<{ system: string; user: string }> = [];
     const llmClient: LlmClient = {
       async answer(prompt) {
         seenPrompts.push(prompt);
-        return "Liquidation happens below maintenance margin [1].";
+        return JSON.stringify({
+          answer: "Liquidation happens below maintenance margin [1].",
+          confidence: "high",
+          citations: [{ sourceNumber: 1 }],
+          missingContext: false,
+        });
       },
     };
 
@@ -46,10 +51,14 @@ describe("answerWithRag", () => {
       }),
     ).resolves.toEqual({
       answer: "Liquidation happens below maintenance margin [1].",
+      confidence: "high",
+      citations: [{ sourceNumber: 1 }],
+      missingContext: false,
       sources: [{ sourcePath: "risk/liquidation.md", chunkId: "risk/liquidation.md#chunk-0", score: 0.95 }],
     });
 
     expect(seenPrompts[0].user).toContain("When does liquidation happen?");
     expect(seenPrompts[0].user).toContain("Liquidation happens below maintenance margin.");
+    expect(seenPrompts[0].user).toContain("Return only valid JSON");
   });
 });
