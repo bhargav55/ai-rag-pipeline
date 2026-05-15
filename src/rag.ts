@@ -12,6 +12,12 @@ const toRetrievedChunkTrace = (results: SearchResult[]) =>
     sourcePath: chunk.sourcePath,
     headingPath: chunk.headingPath,
     score,
+    contentHash: chunk.contentHash,
+    chunkHash: chunk.chunkHash,
+    embeddingModel: chunk.embeddingModel,
+    embeddingDimension: chunk.embeddingDimension,
+    indexVersion: chunk.indexVersion,
+    indexedAt: chunk.indexedAt,
   }));
 
 const toErrorTrace = (error: unknown) => {
@@ -104,6 +110,8 @@ export const answerWithRag = async ({
         sourcePath: chunk.sourcePath,
         chunkId: chunk.id,
         score,
+        indexVersion: chunk.indexVersion,
+        chunkHash: chunk.chunkHash,
       })),
     };
   } catch (error) {

@@ -22,7 +22,18 @@ export type ChunkOptions = {
   overlapChars: number;
 };
 
-export type EmbeddedChunk = Chunk & {
+export type IndexMetadata = {
+  contentHash?: string;
+  chunkHash?: string;
+  embeddingModel?: string;
+  embeddingDimension?: number;
+  indexVersion?: string;
+  indexedAt?: string;
+};
+
+export type IndexedChunk = Chunk & Required<IndexMetadata>;
+
+export type EmbeddedChunk = Chunk & IndexMetadata & {
   embedding: number[];
 };
 
@@ -53,6 +64,12 @@ export type RagRetrievedChunkTrace = {
   sourcePath: string;
   headingPath?: string[];
   score: number;
+  contentHash?: string;
+  chunkHash?: string;
+  embeddingModel?: string;
+  embeddingDimension?: number;
+  indexVersion?: string;
+  indexedAt?: string;
 };
 
 export type RagTraceTimings = {

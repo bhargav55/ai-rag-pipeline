@@ -17,6 +17,13 @@ type QdrantPayload = {
   domain: string;
   chunkIndex: number;
   text: string;
+  headingPath?: string[];
+  contentHash?: string;
+  chunkHash?: string;
+  embeddingModel?: string;
+  embeddingDimension?: number;
+  indexVersion?: string;
+  indexedAt?: string;
 };
 
 type QdrantSearchPoint = {
@@ -92,6 +99,13 @@ export class QdrantVectorStore implements VectorSearchStore {
             domain: chunk.domain,
             chunkIndex: chunk.index,
             text: chunk.text,
+            headingPath: chunk.headingPath,
+            contentHash: chunk.contentHash,
+            chunkHash: chunk.chunkHash,
+            embeddingModel: chunk.embeddingModel,
+            embeddingDimension: chunk.embeddingDimension,
+            indexVersion: chunk.indexVersion,
+            indexedAt: chunk.indexedAt,
           } satisfies QdrantPayload,
         })),
       }),
@@ -119,6 +133,13 @@ export class QdrantVectorStore implements VectorSearchStore {
           domain: String(payload.domain ?? "unknown"),
           index: Number(payload.chunkIndex ?? 0),
           text: String(payload.text ?? ""),
+          headingPath: Array.isArray(payload.headingPath) ? payload.headingPath.map(String) : undefined,
+          contentHash: typeof payload.contentHash === "string" ? payload.contentHash : undefined,
+          chunkHash: typeof payload.chunkHash === "string" ? payload.chunkHash : undefined,
+          embeddingModel: typeof payload.embeddingModel === "string" ? payload.embeddingModel : undefined,
+          embeddingDimension: typeof payload.embeddingDimension === "number" ? payload.embeddingDimension : undefined,
+          indexVersion: typeof payload.indexVersion === "string" ? payload.indexVersion : undefined,
+          indexedAt: typeof payload.indexedAt === "string" ? payload.indexedAt : undefined,
           embedding: vectorFromResult(point.vector),
         },
       };

@@ -4,12 +4,15 @@ A production-style TypeScript/Bun RAG pipeline for perps and blockchain protocol
 
 This repo is built as an AI Engineer interview artifact: clean ingestion, citation-ready chunks, OpenAI embeddings, Qdrant vector DB storage, retrieval, prompt construction, and LLM answers with sources.
 
+For the system-level design, see [`architecture.md`](architecture.md).
+
 ## Current pipeline
 
 ```txt
 Protocol Docs
 -> Loader
 -> Chunker
+-> Content Hash + Index Metadata
 -> OpenAI Embeddings
 -> Qdrant Vector DB
 -> Retriever
@@ -26,7 +29,7 @@ This project shows the core production RAG pattern:
 
 ```txt
 Offline ingest path:
-all docs -> chunks -> embeddings -> Qdrant
+all docs -> chunks -> content hashes + index metadata -> embeddings -> Qdrant
 
 Online ask path:
 question -> question embedding -> Qdrant cosine search -> top-k chunks -> LLM prompt -> answer + sources
@@ -47,6 +50,8 @@ The LLM generates the final answer, grounded by the retrieved chunks.
   - `domain`
 - Section-aware Markdown chunking with heading-path metadata
 - Fixed-size overlapping chunks for plain text and oversized Markdown sections
+- SHA-256 `contentHash` and `chunkHash` metadata for indexed chunks
+- `embeddingModel`, `embeddingDimension`, `indexVersion`, and `indexedAt` metadata on upserted vectors
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
 - pgvector store kept as a Postgres-backed alternative
@@ -99,6 +104,14 @@ Embedding dimension:
 EMBEDDING_DIMENSION=1536
 ```
 
+Index version:
+
+```bash
+INDEX_VERSION=local-protocol-v1
+```
+
+If `INDEX_VERSION` is unset, ingest generates a timestamp-based value. Each indexed chunk stores the index version so traces and API sources can be tied back to the exact corpus/index build that served an answer.
+
 Vector search:
 
 ```txt
@@ -135,6 +148,7 @@ export OPENAI_API_KEY=***
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
 export CHAT_MODEL=gpt-5.5
+export INDEX_VERSION=local-protocol-v1
 ```
 
 Load env vars before running CLI commands:
@@ -211,7 +225,11 @@ Expected output for the current seed docs:
   "docsDir": "data/docs",
   "documents": 5,
   "chunks": 32,
-  "store": "qdrant"
+  "store": "qdrant",
+  "embeddingModel": "text-embedding-3-small",
+  "embeddingDimension": 1536,
+  "indexVersion": "local-protocol-v1",
+  "indexedAt": "2026-05-16T00:00:00.000Z"
 }
 ```
 
@@ -264,12 +282,16 @@ Example answer shape:
     {
       "sourcePath": "protocol/configuration.md",
       "chunkId": "protocol/configuration.md#section-risk-parameters-chunk-0",
-      "score": 0.5373063
+      "score": 0.5373063,
+      "indexVersion": "local-protocol-v1",
+      "chunkHash": "..."
     },
     {
       "sourcePath": "protocol/configuration.md",
       "chunkId": "protocol/configuration.md#section-fee-parameters-chunk-0",
-      "score": 0.5180107
+      "score": 0.5180107,
+      "indexVersion": "local-protocol-v1",
+      "chunkHash": "..."
     }
   ]
 }
@@ -298,7 +320,13 @@ Example trace event:
       "chunkId": "perps/margin.md#section-margin-requirements-chunk-0",
       "sourcePath": "perps/margin.md",
       "headingPath": ["Margin", "Requirements"],
-      "score": 0.5373063
+      "score": 0.5373063,
+      "contentHash": "...",
+      "chunkHash": "...",
+      "embeddingModel": "text-embedding-3-small",
+      "embeddingDimension": 1536,
+      "indexVersion": "local-protocol-v1",
+      "indexedAt": "2026-05-16T00:00:00.000Z"
     }
   ],
   "timingsMs": {
@@ -312,7 +340,7 @@ Example trace event:
 }
 ```
 
-The trace is intentionally operational: request ID, question, `topK`, chat model, retrieved source chunks, optional heading paths, similarity scores, per-stage latency, and errors. The logger redacts obvious secret fields before writing JSON lines, so API keys and vector database credentials are not logged.
+The trace is intentionally operational: request ID, question, `topK`, chat model, retrieved source chunks, optional heading paths, similarity scores, content/chunk hashes, embedding/index metadata, per-stage latency, and errors. The logger redacts obvious secret fields before writing JSON lines, so API keys and vector database credentials are not logged.
 
 Run deterministic RAG evals:
 
@@ -423,7 +451,7 @@ Expected count after deleting the collection and running a fresh ingest of the c
 }
 ```
 
-View stored records without large vectors:
+View stored records without large vectors. Payloads include source metadata plus production index fields such as `contentHash`, `chunkHash`, `embeddingModel`, `embeddingDimension`, `indexVersion`, and `indexedAt`:
 
 ```bash
 curl -s \
@@ -448,6 +476,21 @@ bun run ingest data/docs
 ```
 
 Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 32, not duplicate to 64.
+
+## Current production indexing metadata
+
+`bun run ingest data/docs` now annotates every chunk before embedding/upsert:
+
+```txt
+contentHash      SHA-256 of full source document text
+chunkHash        SHA-256 of exact chunk text
+embeddingModel   embedding model used for the vector
+embeddingDimension vector dimension expected by the store
+indexVersion     INDEX_VERSION or a generated timestamp version
+indexedAt        ingest timestamp
+```
+
+This does not yet skip unchanged documents or delete stale chunks by itself. It is the foundation for the next production step: a document registry that can compare `contentHash` and `chunkIds` across ingest runs, skip unchanged docs, and delete old chunk IDs when a document changes.
 
 ## Hosted Qdrant on Railway
 
@@ -495,7 +538,7 @@ bun run ask "what are the protocol maintenance margin ratio, fees, and leverage 
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, attaches content hashes and index metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
 
 Important distinction:
 
@@ -542,7 +585,8 @@ The export now generates 5 JSONL rows with question, response, retrieved context
 
 ## Next milestones
 
-1. Add deploy config for the HTTP API.
-2. Add ingestion cache so unchanged docs are not re-embedded.
-3. Add CI workflow for tests and typecheck.
-4. Add streaming answers.
+1. Add a document registry for unchanged-document skip logic and stale chunk deletion.
+2. Add deploy config for the HTTP API.
+3. Add `/feedback` endpoint so user-flagged wrong answers can become eval cases.
+4. Add CI workflow for tests and typecheck.
+5. Add streaming answers.

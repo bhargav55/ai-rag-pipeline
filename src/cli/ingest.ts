@@ -1,6 +1,7 @@
 import postgres from "postgres";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
+import { addIndexMetadata, defaultIndexVersion } from "../index-metadata";
 import { chunkMarkdownDocument } from "../markdown-section-chunker";
 import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
@@ -13,6 +14,8 @@ type IngestStore = {
 };
 
 const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
+const embeddingModel = () => Bun.env.EMBEDDING_MODEL ?? "text-embedding-3-small";
+const indexVersion = () => Bun.env.INDEX_VERSION ?? defaultIndexVersion();
 
 const createStore = async (): Promise<IngestStore> => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
@@ -60,8 +63,20 @@ const main = async () => {
 
   const documents = await loadDocuments(docsDir);
   const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
-  const embeddings = await embeddingClient.embed(chunks.map((chunk) => chunk.text));
-  const embeddedChunks = chunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
+  const currentEmbeddingModel = embeddingModel();
+  const currentEmbeddingDimension = embeddingDimension();
+  const currentIndexVersion = indexVersion();
+  const indexedAt = new Date().toISOString();
+  const indexedChunks = addIndexMetadata({
+    documents,
+    chunks,
+    embeddingModel: currentEmbeddingModel,
+    embeddingDimension: currentEmbeddingDimension,
+    indexVersion: currentIndexVersion,
+    indexedAt,
+  });
+  const embeddings = await embeddingClient.embed(indexedChunks.map((chunk) => chunk.text));
+  const embeddedChunks = indexedChunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
 
   await store.upsertMany(embeddedChunks);
   await store.close();
@@ -73,6 +88,10 @@ const main = async () => {
         documents: documents.length,
         chunks: embeddedChunks.length,
         store: store.name,
+        embeddingModel: currentEmbeddingModel,
+        embeddingDimension: currentEmbeddingDimension,
+        indexVersion: currentIndexVersion,
+        indexedAt,
       },
       null,
       2,
