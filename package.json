@@ -9,9 +9,9 @@
     "retrieve": "bun run src/cli/retrieve.ts",
     "ingest": "bun run src/cli/ingest.ts",
     "ask": "bun run src/cli/ask.ts",
+    "serve": "bun run src/cli/server.ts",
     "eval": "bun run src/cli/eval.ts",
     "eval:export": "bun run src/cli/ragas-dataset.ts",
-    "eval:ragas": "cd evals/ragas && uv run python run_ragas.py ../ragas-dataset.jsonl",
     "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
     "typecheck": "tsc --noEmit"
   },

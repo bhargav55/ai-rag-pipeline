@@ -54,12 +54,13 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Production OpenAI-compatible chat client
 - End-to-end RAG answer orchestration
 - Zod-validated structured LLM answers with confidence, citations, and missing-context flags
+- HTTP API with `POST /ask` and `GET /healthz`
 - RAG eval runner for retrieval quality and grounded answer checks
-- Ragas framework eval stack for faithfulness, answer relevancy, context precision, and context recall
+- Ragas-compatible JSONL export for framework-based RAG quality evaluation
 - Seed perps/risk docs
 - Vitest tests
 - CLI tools for load, retrieve, ingest, ask, and eval
-- Python/uv Ragas evaluator for framework-based RAG metrics
+
 
 ## Stack
 
@@ -70,7 +71,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Qdrant vector database
 - Optional Postgres + pgvector backend
 - OpenAI-compatible embeddings/chat APIs
-- Ragas for mature RAG evaluation metrics
+- Ragas-compatible eval dataset export
 
 ## Models and retrieval config
 
@@ -199,6 +200,27 @@ The final argument is `topK`. For example, `3` means retrieve the top 3 most rel
 
 The LLM is instructed to return only valid JSON. The app validates that JSON with Zod before trusting it, so malformed model output fails fast instead of leaking into downstream API responses.
 
+Run the HTTP API:
+
+```bash
+bun run serve
+```
+
+Health check:
+
+```bash
+curl http://localhost:3000/healthz | jq
+```
+
+Ask through the API:
+
+```bash
+curl -s \
+  -X POST http://localhost:3000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"what happens when margin falls below maintenance?","topK":3}' | jq
+```
+
 Example answer shape:
 
 ```json
@@ -250,21 +272,20 @@ Example eval summary:
 }
 ```
 
-Run Ragas framework evals:
+Export Ragas-compatible eval rows:
 
 ```bash
 bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
-bun run eval:ragas
 ```
 
-The Ragas stack exports the real RAG outputs into JSONL rows with:
+The export command runs the real RAG path and writes JSONL rows with:
 
 - `user_input`
 - `response`
 - `retrieved_contexts`
 - `reference`
 
-Then the Python Ragas runner scores:
+Those rows can be used by external RAG evaluation tools to score:
 
 - faithfulness
 - answer relevancy
@@ -273,7 +294,7 @@ Then the Python Ragas runner scores:
 
 For a plain-English explanation of how Ragas works, see [`docs/ragas-framework.md`](docs/ragas-framework.md).
 
-The production answer model can remain `gpt-5.5`. The Ragas judge model defaults to `gpt-4o-mini` via `RAGAS_LLM_MODEL` because Ragas/LangChain may set low temperature internally, and newer GPT-5.5 APIs reject non-default temperature values.
+The production answer model remains `gpt-5.5`.
 
 ## Checking Qdrant records
 
@@ -322,7 +343,7 @@ curl -s \
 bun run ingest data/docs
 ```
 
-Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 20, not duplicate to 40.
+Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 27, not duplicate to 54.
 
 ## Hosted Qdrant on Railway
 
@@ -370,7 +391,7 @@ bun run ask "what happens when margin falls below maintenance?" 3
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks all documents with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, and generates an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, and LLM client are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals plus a Ragas framework evaluator for faithfulness, answer relevancy, context precision, and context recall.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals plus Ragas-compatible JSONL export for semantic evaluation workflows.
 
 Important distinction:
 
@@ -406,28 +427,18 @@ Current deterministic result:
 4 eval cases -> 4 passed -> 0 failed
 ```
 
-Ragas framework evals are also wired and verified:
+Ragas-compatible eval export is also wired and verified:
 
 ```bash
 bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
-bun run eval:ragas
 ```
 
-Latest Ragas report was generated with 4 rows and these metrics:
-
-```txt
-faithfulness
-answer_relevancy
-llm_context_precision_without_reference
-context_recall
-```
+Latest export generated 4 JSONL rows with question, response, retrieved contexts, and reference answer fields.
 
 ## Next milestones
 
-1. Add ingestion cache so unchanged docs are not re-embedded.
-2. Add section-aware markdown chunking instead of fixed-character chunking.
-3. Add structured JSON answer validation with Zod.
-4. Add tracing/logging for retrieval scores and selected sources.
-5. Add CI workflow for tests and typecheck.
-6. Add streaming answers.
-7. Add a small HTTP API endpoint like `POST /ask`.
+1. Add tracing/logging for retrieval scores and selected sources.
+2. Add deploy config for the HTTP API.
+3. Add ingestion cache so unchanged docs are not re-embedded.
+4. Add CI workflow for tests and typecheck.
+5. Add streaming answers.

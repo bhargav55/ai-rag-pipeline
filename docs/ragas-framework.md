@@ -181,14 +181,7 @@ Is any important reference information missing?
 
 That is why Ragas needs access to a judge model.
 
-In this repo:
-
-- production answer model: `gpt-5.5`
-- Ragas judge model default: `gpt-4o-mini`
-
-The production answer model can stay as `gpt-5.5`.
-
-The Ragas judge defaults to `gpt-4o-mini` because Ragas/LangChain may internally set low temperature values like `0.01`, and some newer GPT-5.5 APIs reject non-default temperature values.
+In this repo, the production answer model remains `gpt-5.5`. The repo exports Ragas-compatible JSONL rows that can be consumed by an external evaluation workflow.
 
 ## How Ragas fits into this repo
 
@@ -215,25 +208,22 @@ But deterministic evals are limited. They can miss semantic problems.
 
 For example, an answer can mention the right keywords but still be incomplete or hallucinated.
 
-### Layer 2: Ragas framework evals
+### Layer 2: Ragas-compatible export
 
 Run:
 
 ```bash
 bun run eval:export evals/questions.json evals/ragas-dataset.jsonl 3
-bun run eval:ragas
 ```
 
-The first command runs the real RAG pipeline and exports JSONL rows containing:
+This command runs the real RAG pipeline and exports JSONL rows containing:
 
 - `user_input`
 - `response`
 - `retrieved_contexts`
 - `reference`
 
-The second command runs Ragas over that exported dataset.
-
-It scores:
+External RAG evaluation tools can use those rows to score:
 
 - `faithfulness`
 - `answer_relevancy`
