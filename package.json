@@ -16,6 +16,7 @@
     "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
     "db:schema:ts": "bun run src/cli/db-schema.ts",
     "bootstrap": "bun run db:schema:ts && bun run ingest data/docs",
+    "qdrant:reset": "bun run src/cli/reset-qdrant.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
