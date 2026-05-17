@@ -13,9 +13,12 @@ describe("project documentation", () => {
     expect(architecture).toContain("stale chunk deletion");
   });
 
-  it("links the architecture document from the README", () => {
+  it("documents Qdrant as the only vector store and Postgres as registry only", () => {
     const readme = readFileSync("README.md", "utf8");
+    const architecture = readFileSync("architecture.md", "utf8");
 
-    expect(readme).toContain("architecture.md");
+    expect(`${readme}\n${architecture}`).toContain("Qdrant");
+    expect(`${readme}\n${architecture}`).toContain("Postgres");
+    expect(`${readme}\n${architecture}`).not.toMatch(/pgvector/i);
   });
 });

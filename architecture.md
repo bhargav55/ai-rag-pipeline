@@ -15,7 +15,7 @@ source docs
 -> vector store upsert
 ```
 
-The ingest path loads `.md` and `.txt` files from `data/docs`, splits Markdown by heading sections, falls back to overlapping fixed-size chunks when needed, attaches index metadata, compares the result with the Postgres document registry, deletes stale vector IDs for changed documents, embeds changed chunks only, and writes vectors plus payload metadata to Qdrant or pgvector.
+The ingest path loads `.md` and `.txt` files from `data/docs`, splits Markdown by heading sections, falls back to overlapping fixed-size chunks when needed, attaches index metadata, compares the result with the Postgres document registry, deletes stale vector IDs for changed documents, embeds changed chunks only, and writes vectors plus payload metadata to Qdrant.
 
 Each indexed chunk now carries production debugging metadata:
 
@@ -58,13 +58,13 @@ user question
 -> structured JSON trace log
 ```
 
-Qdrant/pgvector only retrieve source chunks. The LLM writes the final answer using those chunks. The answer includes sources so the response can be audited.
+Qdrant retrieves source chunks. The LLM writes the final answer using those chunks. The answer includes sources so the response can be audited.
 
-## Vector stores
+## Vector store and registry
 
-Qdrant is the default production-style vector database. pgvector remains as a Postgres-backed alternative, and an in-memory vector store is used for tests and simple local demos.
+Qdrant is the only production vector database in this repo. It stores vectors plus source/chunk payload metadata and performs cosine search.
 
-Qdrant stores the vector and payload metadata together. pgvector stores metadata in explicit columns on `rag_chunks`.
+Postgres is used for operational RAG state, not vector search. The `rag_documents` table stores the document registry used for unchanged-document skips and stale chunk deletion.
 
 ## Observability
 
@@ -99,7 +99,7 @@ Implemented:
 
 - section-aware chunking
 - source/citation metadata
-- Qdrant and pgvector stores
+- Qdrant vector store
 - structured answer validation
 - HTTP API
 - structured trace logging

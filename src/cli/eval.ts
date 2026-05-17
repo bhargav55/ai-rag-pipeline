@@ -1,13 +1,11 @@
-import postgres from "postgres";
 import { evaluateRag, summarizeEvalResults, type RagEvalCase } from "../evals";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { OpenAIChatClient } from "../llm/openai-chat";
-import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { VectorSearchStore } from "../types";
 
 type EvalStore = {
-  name: "qdrant" | "pgvector";
+  name: "qdrant";
   store: VectorSearchStore;
   close(): Promise<void>;
 };
@@ -16,21 +14,8 @@ const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
 
 const createStore = (): EvalStore => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
-
-  if (vectorStore === "pgvector") {
-    if (!Bun.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
-    }
-    const db = postgres(Bun.env.DATABASE_URL);
-    return {
-      name: "pgvector",
-      store: new PgVectorStore(db),
-      close: () => db.end(),
-    };
-  }
-
   if (vectorStore !== "qdrant") {
-    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant or pgvector.`);
+    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant.`);
   }
 
   return {
@@ -44,7 +29,6 @@ const createStore = (): EvalStore => {
     close: async () => {},
   };
 };
-
 const loadEvalCases = async (path: string): Promise<RagEvalCase[]> => {
   const file = Bun.file(path);
   if (!(await file.exists())) throw new Error(`Eval file does not exist: ${path}`);

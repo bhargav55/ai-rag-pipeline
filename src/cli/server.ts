@@ -1,15 +1,13 @@
-import postgres from "postgres";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { handleHttpRequest } from "../http-server";
 import { OpenAIChatClient } from "../llm/openai-chat";
 import { answerWithRag } from "../rag";
 import { createLoggerTracer } from "../rag-tracing";
-import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { VectorSearchStore } from "../types";
 
 type ServerStore = {
-  name: "qdrant" | "pgvector";
+  name: "qdrant";
   store: VectorSearchStore;
   close(): Promise<void>;
 };
@@ -18,21 +16,8 @@ const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
 
 const createStore = (): ServerStore => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
-
-  if (vectorStore === "pgvector") {
-    if (!Bun.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
-    }
-    const db = postgres(Bun.env.DATABASE_URL);
-    return {
-      name: "pgvector",
-      store: new PgVectorStore(db),
-      close: () => db.end(),
-    };
-  }
-
   if (vectorStore !== "qdrant") {
-    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant or pgvector.`);
+    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant.`);
   }
 
   return {
@@ -46,7 +31,6 @@ const createStore = (): ServerStore => {
     close: async () => {},
   };
 };
-
 const port = Number(Bun.env.PORT ?? "3000");
 
 Bun.serve({

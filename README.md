@@ -56,7 +56,6 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Stale chunk deletion for changed documents whose chunk IDs disappear
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
-- pgvector store kept as a Postgres-backed alternative
 - In-memory vector store kept for tests/simple demos
 - Retriever that embeds the user query and returns top-k matching chunks
 - Prompt builder that combines retrieved context with user input
@@ -82,7 +81,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Vitest
 - Zod
 - Qdrant vector database
-- Optional Postgres + pgvector backend
+- Postgres document registry
 - OpenAI-compatible embeddings/chat APIs
 - Ragas-compatible eval dataset export
 
@@ -553,22 +552,9 @@ docker compose up -d qdrant
 export QDRANT_URL=http://localhost:6333
 ```
 
-## Optional pgvector backend
-
-Qdrant is the default separate vector database. If you want the Postgres-backed alternative:
-
-```bash
-docker compose up -d postgres
-export VECTOR_STORE=pgvector
-export DATABASE_URL=postgres://rag:***@localhost:5432/rag
-bun run db:schema
-bun run ingest data/docs
-bun run ask "what are the protocol maintenance margin ratio, fees, and leverage limits?" 3
-```
-
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, attaches content hashes and index metadata, uses a document registry to skip unchanged docs and delete stale chunk IDs, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, attaches content hashes and index metadata, uses a Postgres document registry to skip unchanged docs and delete stale chunk IDs, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and production-focused: ingestion, chunking, embedding provider, Qdrant vector store, Postgres registry, retriever, prompt builder, LLM client, and HTTP API are separated. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
 
 Important distinction:
 

@@ -9,12 +9,11 @@ import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
 import { addIndexMetadata, defaultIndexVersion } from "../index-metadata";
 import { chunkMarkdownDocument } from "../markdown-section-chunker";
-import { PgVectorStore } from "../stores/pg-vector-store";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { EmbeddedChunk } from "../types";
 
 type IngestStore = {
-  name: "qdrant" | "pgvector";
+  name: "qdrant";
   upsertMany(chunks: EmbeddedChunk[]): Promise<void>;
   deleteMany(chunkIds: string[]): Promise<void>;
   close(): Promise<void>;
@@ -50,33 +49,16 @@ const createRegistry = (db?: postgres.Sql): Pick<IngestServices, "registry" | "r
 
 const createServices = async (): Promise<IngestServices> => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
-  const needsDatabase = vectorStore === "pgvector" || registryStore() === "postgres";
-  const db = needsDatabase
+  if (vectorStore !== "qdrant") {
+    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant.`);
+  }
+
+  const db = registryStore() === "postgres"
     ? postgres(Bun.env.DATABASE_URL ?? (() => {
-        throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector or DOCUMENT_REGISTRY_STORE=postgres");
+        throw new Error("DATABASE_URL is required when DOCUMENT_REGISTRY_STORE=postgres");
       })())
     : undefined;
   const registry = createRegistry(db);
-
-  if (vectorStore === "pgvector") {
-    if (!db) {
-      throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
-    }
-    const pgStore = new PgVectorStore(db);
-    return {
-      store: {
-        name: "pgvector",
-        upsertMany: (chunks) => pgStore.upsertMany(chunks),
-        deleteMany: (chunkIds) => pgStore.deleteMany(chunkIds),
-        close: () => db.end(),
-      },
-      ...registry,
-    };
-  }
-
-  if (vectorStore !== "qdrant") {
-    throw new Error(`Unsupported VECTOR_STORE: ${vectorStore}. Use qdrant or pgvector.`);
-  }
 
   const store = new QdrantVectorStore({
     url: Bun.env.QDRANT_URL ?? "http://localhost:6333",
