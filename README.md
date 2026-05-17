@@ -52,7 +52,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Fixed-size overlapping chunks for plain text and oversized Markdown sections
 - SHA-256 `contentHash` and `chunkHash` metadata for indexed chunks
 - `embeddingModel`, `embeddingDimension`, `indexVersion`, and `indexedAt` metadata on upserted vectors
-- Local document registry for unchanged-document skip logic
+- Postgres-backed document registry for unchanged-document skip logic
 - Stale chunk deletion for changed documents whose chunk IDs disappear
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
@@ -114,13 +114,13 @@ INDEX_VERSION=local-protocol-v1
 
 If `INDEX_VERSION` is unset, ingest generates a timestamp-based value. Each indexed chunk stores the index version so traces and API sources can be tied back to the exact corpus/index build that served an answer.
 
-Document registry path:
+Document registry store:
 
 ```bash
-DOCUMENT_REGISTRY_PATH=.rag/document-registry.json
+DOCUMENT_REGISTRY_STORE=postgres
 ```
 
-If `DOCUMENT_REGISTRY_PATH` is unset, ingest writes `.rag/document-registry.json`. The `.rag/` directory is ignored by git because it is local runtime state, not source code.
+Production ingest uses Postgres for the document registry. `DOCUMENT_REGISTRY_STORE=postgres` requires `DATABASE_URL` and stores registry rows in `rag_documents`. For local-only demos, `DOCUMENT_REGISTRY_STORE=file` writes `.rag/document-registry.json`; `.rag/` is ignored by git because it is runtime state.
 
 Vector search:
 
@@ -159,7 +159,7 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
 export CHAT_MODEL=gpt-5.5
 export INDEX_VERSION=local-protocol-v1
-export DOCUMENT_REGISTRY_PATH=.rag/document-registry.json
+export DOCUMENT_REGISTRY_STORE=postgres
 ```
 
 Load env vars before running CLI commands:
@@ -239,7 +239,7 @@ Expected output for the current seed docs:
   "upsertedChunks": 32,
   "deletedStaleChunks": 0,
   "skippedDocuments": 0,
-  "registryPath": ".rag/document-registry.json",
+  "registryStore": "postgres",
   "store": "qdrant",
   "embeddingModel": "text-embedding-3-small",
   "embeddingDimension": 1536,
@@ -510,7 +510,17 @@ This metadata feeds the document registry. On each ingest, the registry compares
 1. skips unchanged documents with the same `contentHash`, `embeddingModel`, and `embeddingDimension`
 2. re-embeds changed documents
 3. deletes stale chunk IDs that existed in the prior registry record but no longer exist after re-chunking
-4. writes the next registry state to `DOCUMENT_REGISTRY_PATH` or `.rag/document-registry.json`
+4. writes the next registry state to Postgres `rag_documents` when `DOCUMENT_REGISTRY_STORE=postgres`; `DOCUMENT_REGISTRY_STORE=file` remains available for local-only demos
+
+Use Postgres for the production document registry even when vectors live in Qdrant:
+
+```bash
+export DATABASE_URL=postgres://rag:***@localhost:5432/rag
+export DOCUMENT_REGISTRY_STORE=postgres
+bun run db:schema
+```
+
+For local-only demos without Postgres, set `DOCUMENT_REGISTRY_STORE=file`, but production deploys should use Postgres so registry state is shared, persistent, and queryable.
 
 ## Hosted Qdrant on Railway
 

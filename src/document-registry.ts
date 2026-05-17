@@ -2,6 +2,20 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { IndexedChunk } from "./types";
 
+type PgClient = {
+  unsafe<T extends unknown[]>(sql: string, params?: unknown[]): Promise<T>;
+};
+
+type PgDocumentRegistryRow = {
+  source_path: string;
+  content_hash: string;
+  chunk_ids: string[] | string;
+  embedding_model: string;
+  embedding_dimension: number;
+  index_version: string;
+  indexed_at: string | Date;
+};
+
 export type DocumentRegistryRecord = {
   sourcePath: string;
   contentHash: string;
@@ -21,6 +35,11 @@ export type RegistryUpdatePlan = {
   staleChunkIds: string[];
   skippedSourcePaths: string[];
   next: DocumentRegistryState;
+};
+
+export type DocumentRegistry = {
+  read(): Promise<DocumentRegistryState>;
+  write(state: DocumentRegistryState): Promise<void>;
 };
 
 export const emptyRegistryState = (): DocumentRegistryState => ({ documents: {} });
@@ -85,7 +104,7 @@ export const planRegistryUpdate = (
   };
 };
 
-export class FileDocumentRegistry {
+export class FileDocumentRegistry implements DocumentRegistry {
   constructor(private readonly path: string) {}
 
   async read(): Promise<DocumentRegistryState> {
@@ -102,5 +121,80 @@ export class FileDocumentRegistry {
   async write(state: DocumentRegistryState): Promise<void> {
     await mkdir(dirname(this.path), { recursive: true });
     await writeFile(this.path, `${JSON.stringify(state, null, 2)}\n`);
+  }
+}
+
+const parseChunkIds = (value: string[] | string): string[] => {
+  if (Array.isArray(value)) return value.map(String);
+  return JSON.parse(value) as string[];
+};
+
+export class PostgresDocumentRegistry implements DocumentRegistry {
+  constructor(private readonly db: PgClient) {}
+
+  async read(): Promise<DocumentRegistryState> {
+    const rows = await this.db.unsafe<PgDocumentRegistryRow[]>(
+      `select
+         source_path,
+         content_hash,
+         chunk_ids,
+         embedding_model,
+         embedding_dimension,
+         index_version,
+         indexed_at
+       from rag_documents
+       order by source_path`,
+    );
+
+    return {
+      documents: Object.fromEntries(
+        rows.map((row) => [
+          row.source_path,
+          {
+            sourcePath: row.source_path,
+            contentHash: row.content_hash,
+            chunkIds: parseChunkIds(row.chunk_ids),
+            embeddingModel: row.embedding_model,
+            embeddingDimension: Number(row.embedding_dimension),
+            indexVersion: row.index_version,
+            indexedAt: new Date(row.indexed_at).toISOString(),
+          },
+        ]),
+      ),
+    };
+  }
+
+  async write(state: DocumentRegistryState): Promise<void> {
+    for (const record of Object.values(state.documents)) {
+      await this.db.unsafe(
+        `insert into rag_documents (
+           source_path,
+           content_hash,
+           chunk_ids,
+           embedding_model,
+           embedding_dimension,
+           index_version,
+           indexed_at
+         )
+         values ($1, $2, $3::jsonb, $4, $5, $6, $7::timestamptz)
+         on conflict (source_path) do update set
+           content_hash = excluded.content_hash,
+           chunk_ids = excluded.chunk_ids,
+           embedding_model = excluded.embedding_model,
+           embedding_dimension = excluded.embedding_dimension,
+           index_version = excluded.index_version,
+           indexed_at = excluded.indexed_at,
+           updated_at = now()`,
+        [
+          record.sourcePath,
+          record.contentHash,
+          JSON.stringify(record.chunkIds),
+          record.embeddingModel,
+          record.embeddingDimension,
+          record.indexVersion,
+          record.indexedAt,
+        ],
+      );
+    }
   }
 }

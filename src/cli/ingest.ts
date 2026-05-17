@@ -1,5 +1,10 @@
 import postgres from "postgres";
-import { FileDocumentRegistry, planRegistryUpdate } from "../document-registry";
+import {
+  FileDocumentRegistry,
+  PostgresDocumentRegistry,
+  type DocumentRegistry,
+  planRegistryUpdate,
+} from "../document-registry";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
 import { addIndexMetadata, defaultIndexVersion } from "../index-metadata";
@@ -15,24 +20,57 @@ type IngestStore = {
   close(): Promise<void>;
 };
 
+type IngestServices = {
+  store: IngestStore;
+  registry: DocumentRegistry;
+  registryStore: "postgres" | "file";
+  registryPath?: string;
+};
+
 const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
 const embeddingModel = () => Bun.env.EMBEDDING_MODEL ?? "text-embedding-3-small";
 const indexVersion = () => Bun.env.INDEX_VERSION ?? defaultIndexVersion();
+const registryStore = () => Bun.env.DOCUMENT_REGISTRY_STORE ?? "postgres";
+const registryPath = () => Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json";
 
-const createStore = async (): Promise<IngestStore> => {
+const createRegistry = (db?: postgres.Sql): Pick<IngestServices, "registry" | "registryStore" | "registryPath"> => {
+  const store = registryStore();
+  if (store === "postgres") {
+    if (!db) {
+      throw new Error("DATABASE_URL is required when DOCUMENT_REGISTRY_STORE=postgres");
+    }
+    return { registry: new PostgresDocumentRegistry(db), registryStore: "postgres" };
+  }
+  if (store === "file") {
+    const path = registryPath();
+    return { registry: new FileDocumentRegistry(path), registryStore: "file", registryPath: path };
+  }
+  throw new Error(`Unsupported DOCUMENT_REGISTRY_STORE: ${store}. Use postgres or file.`);
+};
+
+const createServices = async (): Promise<IngestServices> => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
+  const needsDatabase = vectorStore === "pgvector" || registryStore() === "postgres";
+  const db = needsDatabase
+    ? postgres(Bun.env.DATABASE_URL ?? (() => {
+        throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector or DOCUMENT_REGISTRY_STORE=postgres");
+      })())
+    : undefined;
+  const registry = createRegistry(db);
 
   if (vectorStore === "pgvector") {
-    if (!Bun.env.DATABASE_URL) {
+    if (!db) {
       throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
     }
-    const db = postgres(Bun.env.DATABASE_URL);
     const pgStore = new PgVectorStore(db);
     return {
-      name: "pgvector",
-      upsertMany: (chunks) => pgStore.upsertMany(chunks),
-      deleteMany: (chunkIds) => pgStore.deleteMany(chunkIds),
-      close: () => db.end(),
+      store: {
+        name: "pgvector",
+        upsertMany: (chunks) => pgStore.upsertMany(chunks),
+        deleteMany: (chunkIds) => pgStore.deleteMany(chunkIds),
+        close: () => db.end(),
+      },
+      ...registry,
     };
   }
 
@@ -49,10 +87,13 @@ const createStore = async (): Promise<IngestStore> => {
   await store.ensureCollection();
 
   return {
-    name: "qdrant",
-    upsertMany: (chunks) => store.upsertMany(chunks),
-    deleteMany: (chunkIds) => store.deleteMany(chunkIds),
-    close: async () => {},
+    store: {
+      name: "qdrant",
+      upsertMany: (chunks) => store.upsertMany(chunks),
+      deleteMany: (chunkIds) => store.deleteMany(chunkIds),
+      close: () => db?.end() ?? Promise.resolve(),
+    },
+    ...registry,
   };
 };
 
@@ -64,7 +105,7 @@ const main = async () => {
   }
 
   const embeddingClient = new OpenAIEmbeddingClient();
-  const store = await createStore();
+  const { store, registry, registryStore: activeRegistryStore, registryPath: activeRegistryPath } = await createServices();
 
   const documents = await loadDocuments(docsDir);
   const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
@@ -80,7 +121,6 @@ const main = async () => {
     indexVersion: currentIndexVersion,
     indexedAt,
   });
-  const registry = new FileDocumentRegistry(Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json");
   const registryState = await registry.read();
   const registryPlan = planRegistryUpdate(registryState, indexedChunks);
   const embeddings = await embeddingClient.embed(registryPlan.chunksToUpsert.map((chunk) => chunk.text));
@@ -100,7 +140,8 @@ const main = async () => {
         upsertedChunks: embeddedChunks.length,
         deletedStaleChunks: registryPlan.staleChunkIds.length,
         skippedDocuments: registryPlan.skippedSourcePaths.length,
-        registryPath: Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json",
+        registryStore: activeRegistryStore,
+        ...(activeRegistryPath ? { registryPath: activeRegistryPath } : {}),
         store: store.name,
         embeddingModel: currentEmbeddingModel,
         embeddingDimension: currentEmbeddingDimension,
