@@ -55,6 +55,18 @@ describe("PgVectorStore", () => {
     ]);
   });
 
+  it("deletes stale chunks by id", async () => {
+    const db = new FakeDb();
+    const store = new PgVectorStore(db);
+
+    await store.deleteMany(["old-a", "old-b"]);
+
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0].sql).toContain("delete from rag_chunks");
+    expect(db.calls[0].sql).toContain("where id = any($1)");
+    expect(db.calls[0].params).toEqual([["old-a", "old-b"]]);
+  });
+
   it("searches pgvector with cosine distance and returns scored chunks", async () => {
     const db = new FakeDb();
     db.rows = [

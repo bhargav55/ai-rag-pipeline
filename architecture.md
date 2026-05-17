@@ -9,11 +9,13 @@ source docs
 -> recursive loader
 -> section-aware chunker
 -> index metadata annotator
--> OpenAI-compatible embedding client
+-> document registry planner
+-> stale vector deletion
+-> OpenAI-compatible embedding client for changed chunks
 -> vector store upsert
 ```
 
-The ingest path loads `.md` and `.txt` files from `data/docs`, splits Markdown by heading sections, falls back to overlapping fixed-size chunks when needed, embeds each chunk, and writes vectors plus payload metadata to Qdrant or pgvector.
+The ingest path loads `.md` and `.txt` files from `data/docs`, splits Markdown by heading sections, falls back to overlapping fixed-size chunks when needed, attaches index metadata, compares the result with the local document registry, deletes stale vector IDs for changed documents, embeds changed chunks only, and writes vectors plus payload metadata to Qdrant or pgvector.
 
 Each indexed chunk now carries production debugging metadata:
 
@@ -26,7 +28,21 @@ Each indexed chunk now carries production debugging metadata:
 - `headingPath`: Markdown section breadcrumb when available
 - `sourcePath`, `domain`, `chunkIndex`, `chunkId`
 
-This metadata makes index contents auditable and is the foundation for incremental ingestion, stale chunk deletion, and shadow index comparison.
+This metadata makes index contents auditable and drives the document registry used for incremental ingestion, stale chunk deletion, and shadow index comparison.
+
+## Document registry
+
+The local document registry lives at `DOCUMENT_REGISTRY_PATH` or `.rag/document-registry.json`. It records:
+
+- `sourcePath`
+- `contentHash`
+- `chunkIds`
+- `embeddingModel`
+- `embeddingDimension`
+- `indexVersion`
+- `indexedAt`
+
+On each ingest, the registry planner groups current chunks by source document. If a document has the same `contentHash`, `embeddingModel`, and `embeddingDimension` as the previous registry record, ingest skips that document and avoids re-embedding its chunks. If a document changed, ingest computes old chunk IDs that are no longer present and asks the vector store to delete them before upserting the new changed chunks.
 
 ## Online ask path
 
@@ -90,22 +106,23 @@ Implemented:
 - deterministic evals
 - judge-based evals
 - content hashes and index metadata on chunks
+- document registry for unchanged-document skip logic
+- stale chunk deletion when a document shrinks or changes chunk boundaries
 
 Still missing:
 
-- document registry for tracking which docs/chunks are indexed
-- stale chunk deletion when a document shrinks or changes chunk boundaries
-- unchanged-document skip logic to avoid unnecessary re-embedding
 - `/feedback` endpoint for user-flagged wrong answers
 - `/readyz` endpoint that checks vector store and model readiness
 - shadow/candidate index comparison before embedding/chunking upgrades
 - Railway deployment config for the API service
 
-## Stale chunk deletion plan
+## Stale chunk deletion behavior
 
-Content hashes and chunk hashes are the first step. The next production step is a document registry that records `sourcePath`, `contentHash`, `chunkIds`, `embeddingModel`, `embeddingDimension`, `indexVersion`, and `indexedAt` for every ingest. With that registry, ingest can:
+Content hashes, chunk hashes, and the document registry now work together during ingest:
 
 1. Skip unchanged documents.
 2. Re-embed changed documents.
 3. Delete old chunk IDs that no longer exist after re-chunking.
 4. Attribute every answer to the exact index version that served it.
+
+This is intentionally local-file backed for now so the portfolio artifact stays easy to run. In a multi-replica production deployment, the same registry shape should move to Postgres or another shared transactional store.

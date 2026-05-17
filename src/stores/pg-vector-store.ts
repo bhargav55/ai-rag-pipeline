@@ -88,6 +88,11 @@ export class PgVectorStore implements VectorSearchStore {
     }
   }
 
+  async deleteMany(chunkIds: string[]): Promise<void> {
+    if (chunkIds.length === 0) return;
+    await this.db.unsafe(`delete from rag_chunks where id = any($1)`, [chunkIds]);
+  }
+
   async search(queryEmbedding: number[], topK: number): Promise<SearchResult[]> {
     const rows = await this.db.unsafe<PgRow[]>(
       `select

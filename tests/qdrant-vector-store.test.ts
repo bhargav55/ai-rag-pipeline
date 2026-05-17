@@ -114,6 +114,26 @@ describe("QdrantVectorStore", () => {
     expect(body.points[0].id).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("deletes stale chunks by stable point IDs", async () => {
+    const fake = new FakeFetch();
+    const store = new QdrantVectorStore({
+      url: "http://localhost:6333",
+      collection: "protocol_docs",
+      dimension: 3,
+      fetch: fake.fetch,
+    });
+
+    await store.deleteMany(["perps/funding.md#chunk-0", "perps/funding.md#chunk-1"]);
+
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0].url).toBe("http://localhost:6333/collections/protocol_docs/points/delete?wait=true");
+    expect(fake.calls[0].init?.method).toBe("POST");
+    const body = JSON.parse(String(fake.calls[0].init?.body));
+    expect(body.points).toHaveLength(2);
+    expect(body.points[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.points[1]).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it("searches Qdrant and maps results back into scored chunks", async () => {
     const fake = new FakeFetch();
     fake.responses = [

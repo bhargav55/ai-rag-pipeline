@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { FileDocumentRegistry, planRegistryUpdate } from "../document-registry";
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { loadDocuments } from "../loader";
 import { addIndexMetadata, defaultIndexVersion } from "../index-metadata";
@@ -10,6 +11,7 @@ import type { EmbeddedChunk } from "../types";
 type IngestStore = {
   name: "qdrant" | "pgvector";
   upsertMany(chunks: EmbeddedChunk[]): Promise<void>;
+  deleteMany(chunkIds: string[]): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -25,9 +27,11 @@ const createStore = async (): Promise<IngestStore> => {
       throw new Error("DATABASE_URL is required when VECTOR_STORE=pgvector");
     }
     const db = postgres(Bun.env.DATABASE_URL);
+    const pgStore = new PgVectorStore(db);
     return {
       name: "pgvector",
-      upsertMany: (chunks) => new PgVectorStore(db).upsertMany(chunks),
+      upsertMany: (chunks) => pgStore.upsertMany(chunks),
+      deleteMany: (chunkIds) => pgStore.deleteMany(chunkIds),
       close: () => db.end(),
     };
   }
@@ -47,6 +51,7 @@ const createStore = async (): Promise<IngestStore> => {
   return {
     name: "qdrant",
     upsertMany: (chunks) => store.upsertMany(chunks),
+    deleteMany: (chunkIds) => store.deleteMany(chunkIds),
     close: async () => {},
   };
 };
@@ -75,10 +80,15 @@ const main = async () => {
     indexVersion: currentIndexVersion,
     indexedAt,
   });
-  const embeddings = await embeddingClient.embed(indexedChunks.map((chunk) => chunk.text));
-  const embeddedChunks = indexedChunks.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
+  const registry = new FileDocumentRegistry(Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json");
+  const registryState = await registry.read();
+  const registryPlan = planRegistryUpdate(registryState, indexedChunks);
+  const embeddings = await embeddingClient.embed(registryPlan.chunksToUpsert.map((chunk) => chunk.text));
+  const embeddedChunks = registryPlan.chunksToUpsert.map((chunk, index) => ({ ...chunk, embedding: embeddings[index] }));
 
+  await store.deleteMany(registryPlan.staleChunkIds);
   await store.upsertMany(embeddedChunks);
+  await registry.write(registryPlan.next);
   await store.close();
 
   console.log(
@@ -86,7 +96,11 @@ const main = async () => {
       {
         docsDir,
         documents: documents.length,
-        chunks: embeddedChunks.length,
+        chunks: chunks.length,
+        upsertedChunks: embeddedChunks.length,
+        deletedStaleChunks: registryPlan.staleChunkIds.length,
+        skippedDocuments: registryPlan.skippedSourcePaths.length,
+        registryPath: Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json",
         store: store.name,
         embeddingModel: currentEmbeddingModel,
         embeddingDimension: currentEmbeddingDimension,

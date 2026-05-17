@@ -112,6 +112,17 @@ export class QdrantVectorStore implements VectorSearchStore {
     });
   }
 
+  async deleteMany(chunkIds: string[]): Promise<void> {
+    if (chunkIds.length === 0) return;
+
+    await this.request(`/collections/${this.collection}/points/delete?wait=true`, {
+      method: "POST",
+      body: JSON.stringify({
+        points: chunkIds.map(qdrantPointId),
+      }),
+    });
+  }
+
   async search(queryEmbedding: number[], topK: number): Promise<SearchResult[]> {
     const response = await this.request<QdrantSearchResponse>(`/collections/${this.collection}/points/search`, {
       method: "POST",

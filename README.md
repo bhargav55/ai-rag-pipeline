@@ -29,7 +29,7 @@ This project shows the core production RAG pattern:
 
 ```txt
 Offline ingest path:
-all docs -> chunks -> content hashes + index metadata -> embeddings -> Qdrant
+all docs -> chunks -> content hashes + index metadata -> document registry plan -> stale deletion + embeddings -> Qdrant
 
 Online ask path:
 question -> question embedding -> Qdrant cosine search -> top-k chunks -> LLM prompt -> answer + sources
@@ -52,6 +52,8 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Fixed-size overlapping chunks for plain text and oversized Markdown sections
 - SHA-256 `contentHash` and `chunkHash` metadata for indexed chunks
 - `embeddingModel`, `embeddingDimension`, `indexVersion`, and `indexedAt` metadata on upserted vectors
+- Local document registry for unchanged-document skip logic
+- Stale chunk deletion for changed documents whose chunk IDs disappear
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
 - pgvector store kept as a Postgres-backed alternative
@@ -112,6 +114,14 @@ INDEX_VERSION=local-protocol-v1
 
 If `INDEX_VERSION` is unset, ingest generates a timestamp-based value. Each indexed chunk stores the index version so traces and API sources can be tied back to the exact corpus/index build that served an answer.
 
+Document registry path:
+
+```bash
+DOCUMENT_REGISTRY_PATH=.rag/document-registry.json
+```
+
+If `DOCUMENT_REGISTRY_PATH` is unset, ingest writes `.rag/document-registry.json`. The `.rag/` directory is ignored by git because it is local runtime state, not source code.
+
 Vector search:
 
 ```txt
@@ -149,6 +159,7 @@ export OPENAI_BASE_URL=https://api.openai.com/v1
 export EMBEDDING_MODEL=text-embedding-3-small
 export CHAT_MODEL=gpt-5.5
 export INDEX_VERSION=local-protocol-v1
+export DOCUMENT_REGISTRY_PATH=.rag/document-registry.json
 ```
 
 Load env vars before running CLI commands:
@@ -225,6 +236,10 @@ Expected output for the current seed docs:
   "docsDir": "data/docs",
   "documents": 5,
   "chunks": 32,
+  "upsertedChunks": 32,
+  "deletedStaleChunks": 0,
+  "skippedDocuments": 0,
+  "registryPath": ".rag/document-registry.json",
   "store": "qdrant",
   "embeddingModel": "text-embedding-3-small",
   "embeddingDimension": 1536,
@@ -475,7 +490,7 @@ curl -s \
 bun run ingest data/docs
 ```
 
-Re-running ingest is idempotent for the same docs because chunks are upserted by stable chunk IDs. The count should stay at 32, not duplicate to 64.
+Re-running ingest is idempotent for the same docs because the document registry skips unchanged documents and chunks are upserted by stable chunk IDs. After the first ingest, unchanged docs should report `skippedDocuments` and avoid re-embedding. If a document changes and produces fewer/different chunk IDs, stale chunk IDs from the previous registry record are deleted from the vector store before the new chunks are upserted.
 
 ## Current production indexing metadata
 
@@ -490,7 +505,12 @@ indexVersion     INDEX_VERSION or a generated timestamp version
 indexedAt        ingest timestamp
 ```
 
-This does not yet skip unchanged documents or delete stale chunks by itself. It is the foundation for the next production step: a document registry that can compare `contentHash` and `chunkIds` across ingest runs, skip unchanged docs, and delete old chunk IDs when a document changes.
+This metadata feeds the document registry. On each ingest, the registry compares current chunks with previous records and:
+
+1. skips unchanged documents with the same `contentHash`, `embeddingModel`, and `embeddingDimension`
+2. re-embeds changed documents
+3. deletes stale chunk IDs that existed in the prior registry record but no longer exist after re-chunking
+4. writes the next registry state to `DOCUMENT_REGISTRY_PATH` or `.rag/document-registry.json`
 
 ## Hosted Qdrant on Railway
 
@@ -538,7 +558,7 @@ bun run ask "what are the protocol maintenance margin ratio, fees, and leverage 
 
 ## Interview framing
 
-I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, attaches content hashes and index metadata, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
+I built a perps/blockchain RAG pipeline from first principles. The system loads protocol docs, chunks Markdown by section with citation metadata, attaches content hashes and index metadata, uses a document registry to skip unchanged docs and delete stale chunk IDs, creates production OpenAI embeddings, stores vectors in Qdrant, retrieves top-k context with cosine similarity for user questions, builds a grounded prompt, validates structured LLM JSON with Zod, and returns an answer with sources. The design keeps each stage testable and swappable: ingestion, chunking, embedding provider, vector store, retriever, prompt builder, LLM client, and HTTP API are separated. pgvector is also implemented as an alternate backend to show I understand both dedicated vector databases and Postgres-native vector search. The repo includes deterministic RAG regression evals, judge-based semantic scoring for faithfulness/relevance/citations, plus Ragas-compatible JSONL export for external semantic evaluation workflows.
 
 Important distinction:
 
@@ -585,8 +605,8 @@ The export now generates 5 JSONL rows with question, response, retrieved context
 
 ## Next milestones
 
-1. Add a document registry for unchanged-document skip logic and stale chunk deletion.
-2. Add deploy config for the HTTP API.
-3. Add `/feedback` endpoint so user-flagged wrong answers can become eval cases.
+1. Add deploy config for the HTTP API.
+2. Add `/feedback` endpoint so user-flagged wrong answers can become eval cases.
+3. Add `/readyz` endpoint that checks vector store and model readiness.
 4. Add CI workflow for tests and typecheck.
 5. Add streaming answers.
