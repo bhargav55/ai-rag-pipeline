@@ -17,6 +17,7 @@
     "db:schema:ts": "bun run src/cli/db-schema.ts",
     "bootstrap": "bun run db:schema:ts && bun run ingest data/docs",
     "qdrant:reset": "bun run src/cli/reset-qdrant.ts",
+    "registry:reset": "bun run src/cli/reset-registry.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
