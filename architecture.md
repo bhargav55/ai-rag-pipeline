@@ -58,6 +58,17 @@ user question
 -> structured JSON trace log
 ```
 
+Readiness path:
+
+```txt
+GET /readyz
+-> env var validation
+-> Qdrant collection check
+-> Postgres rag_documents check
+-> model config check
+-> 200 ready or 503 with failed checks
+```
+
 Qdrant retrieves source chunks. The LLM writes the final answer using those chunks. The answer includes sources so the response can be audited.
 
 ## Vector store and registry
@@ -108,13 +119,14 @@ Implemented:
 - content hashes and index metadata on chunks
 - Postgres-backed document registry for unchanged-document skip logic
 - stale chunk deletion when a document shrinks or changes chunk boundaries
+- `/readyz` endpoint that checks env vars, Qdrant, Postgres, registry schema, and model config
+- Dockerfile for Railway/API deployment
 
 Still missing:
 
 - `/feedback` endpoint for user-flagged wrong answers
-- `/readyz` endpoint that checks vector store and model readiness
 - shadow/candidate index comparison before embedding/chunking upgrades
-- Railway deployment config for the API service
+- full Railway API deployment verification
 
 ## Stale chunk deletion behavior
 

@@ -62,7 +62,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Production OpenAI-compatible chat client
 - End-to-end RAG answer orchestration
 - Zod-validated structured LLM answers with confidence, citations, and missing-context flags
-- HTTP API with `POST /ask` and `GET /healthz`
+- HTTP API with `POST /ask`, `GET /healthz`, and `GET /readyz`
 - Structured RAG tracing/logging with request IDs, retrieval metadata, stage timings, and error events
 - JSON logger with log levels, timestamps, and secret-field redaction
 - RAG eval runner for retrieval quality and grounded answer checks
@@ -268,6 +268,22 @@ Health check:
 ```bash
 curl http://localhost:3000/healthz | jq
 ```
+
+Readiness check:
+
+```bash
+curl http://localhost:3000/readyz | jq
+```
+
+`/healthz` only confirms the HTTP process is alive. `/readyz` confirms the production dependencies are usable before traffic should be sent to the service:
+
+- required env vars: `OPENAI_API_KEY`, `QDRANT_URL`, `QDRANT_COLLECTION`, `DATABASE_URL`
+- Qdrant collection exists and is reachable
+- Postgres is reachable
+- `rag_documents` table exists
+- embedding/chat model config is valid
+
+If any dependency fails, `/readyz` returns HTTP 503 with per-check details.
 
 Ask through the API:
 
@@ -521,6 +537,41 @@ bun run db:schema
 
 For local-only demos without Postgres, set `DOCUMENT_REGISTRY_STORE=file`, but production deploys should use Postgres so registry state is shared, persistent, and queryable.
 
+## Hosted Railway deployment
+
+The production-style Railway deployment uses three services in the same Railway project:
+
+- API service: runs this repo with `bun run serve`
+- Qdrant service: stores vectors and chunk payloads
+- Postgres service: stores the `rag_documents` document registry
+
+Required API env vars on Railway:
+
+```bash
+OPENAI_API_KEY=***
+OPENAI_BASE_URL=https://api.openai.com/v1
+CHAT_MODEL=gpt-5.5
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSION=1536
+INDEX_VERSION=railway-protocol-v1
+VECTOR_STORE=qdrant
+QDRANT_URL=https://<qdrant-railway-domain>
+QDRANT_COLLECTION=protocol_docs
+QDRANT_API_KEY=***
+DATABASE_URL=postgres://...
+DOCUMENT_REGISTRY_STORE=postgres
+```
+
+Before serving traffic, run the schema migration and ingest once against the production services:
+
+```bash
+bun run db:schema
+bun run ingest data/docs
+curl https://<api-railway-domain>/readyz | jq
+```
+
+`/readyz` should return HTTP 200 before the API is considered live. If it returns 503, inspect the failed check and fix the missing env var, Qdrant collection, or Postgres schema before using `/ask`.
+
 ## Hosted Qdrant on Railway
 
 A Railway-hosted Qdrant service is available for production-style demos:
@@ -601,8 +652,8 @@ The export now generates 5 JSONL rows with question, response, retrieved context
 
 ## Next milestones
 
-1. Add deploy config for the HTTP API.
+1. Deploy the HTTP API on Railway with managed Postgres wired to Qdrant.
 2. Add `/feedback` endpoint so user-flagged wrong answers can become eval cases.
-3. Add `/readyz` endpoint that checks vector store and model readiness.
-4. Add CI workflow for tests and typecheck.
+3. Add CI workflow for tests and typecheck.
+4. Persist eval/feedback runs in Postgres.
 5. Add streaming answers.

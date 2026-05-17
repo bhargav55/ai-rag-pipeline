@@ -7,8 +7,14 @@ const AskRequestSchema = z.object({
 
 type AskRequest = z.infer<typeof AskRequestSchema>;
 
+type ReadinessResult = {
+  ok: boolean;
+  checks: { name: string; ok: boolean; message?: string }[];
+};
+
 type AskHandlerDeps = {
   answer(input: AskRequest): Promise<unknown>;
+  readiness?(): Promise<ReadinessResult>;
 };
 
 const jsonResponse = (body: unknown, status = 200): Response =>
@@ -22,6 +28,14 @@ export const handleHttpRequest = async (request: Request, deps: AskHandlerDeps):
 
   if (request.method === "GET" && url.pathname === "/healthz") {
     return jsonResponse({ ok: true });
+  }
+
+  if (request.method === "GET" && url.pathname === "/readyz") {
+    if (!deps.readiness) {
+      return jsonResponse({ ok: false, checks: [{ name: "readyz", ok: false, message: "Readiness checker not configured" }] }, 503);
+    }
+    const readiness = await deps.readiness();
+    return jsonResponse(readiness, readiness.ok ? 200 : 503);
   }
 
   if (request.method === "POST" && url.pathname === "/ask") {

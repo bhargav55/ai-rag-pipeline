@@ -3,6 +3,7 @@ import { handleHttpRequest } from "../http-server";
 import { OpenAIChatClient } from "../llm/openai-chat";
 import { answerWithRag } from "../rag";
 import { createLoggerTracer } from "../rag-tracing";
+import { checkReadiness } from "../readiness";
 import { QdrantVectorStore } from "../stores/qdrant-vector-store";
 import type { VectorSearchStore } from "../types";
 
@@ -55,6 +56,7 @@ Bun.serve({
           await close();
         }
       },
+      readiness: () => checkReadiness(),
     });
   },
 });
