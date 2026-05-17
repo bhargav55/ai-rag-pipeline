@@ -562,11 +562,22 @@ DATABASE_URL=postgres://...
 DOCUMENT_REGISTRY_STORE=postgres
 ```
 
-Before serving traffic, run the schema migration and ingest once against the production services:
+Before serving traffic, run the schema migration and ingest once against the production services. Use the TypeScript schema runner in Railway containers because it only needs the app's existing `postgres` package and does not require a `psql` binary:
 
 ```bash
-bun run db:schema
+bun run db:schema:ts
 bun run ingest data/docs
+```
+
+For a combined one-shot bootstrap command:
+
+```bash
+bun run bootstrap
+```
+
+Then verify readiness:
+
+```bash
 curl https://<api-railway-domain>/readyz | jq
 ```
 

@@ -14,6 +14,8 @@
     "eval:judge": "bun run src/cli/judge-eval.ts",
     "eval:export": "bun run src/cli/ragas-dataset.ts",
     "db:schema": "psql \"$DATABASE_URL\" -f db/schema.sql",
+    "db:schema:ts": "bun run src/cli/db-schema.ts",
+    "bootstrap": "bun run db:schema:ts && bun run ingest data/docs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
