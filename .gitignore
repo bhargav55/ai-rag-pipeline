@@ -10,3 +10,4 @@ evals/ragas-dataset.jsonl
 evals/ragas-report.json
 evals/ragas/.venv/
 .rag/
+AGENTS.MD
