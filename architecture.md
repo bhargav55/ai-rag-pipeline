@@ -58,6 +58,22 @@ user question
 -> structured JSON trace log
 ```
 
+## Agent path
+
+The protocol knowledge agent wraps the online ask path with a planning and tool-use loop:
+
+```txt
+user question
+-> planning prompt
+-> search query plan
+-> retrieve_protocol_context tool calls
+-> evidence dedupe
+-> grounded answer prompt
+-> structured answer, citations, missing docs, next actions
+```
+
+This is still a single-agent system: one planner/answerer uses retrieval as a tool instead of delegating to multiple agents. That keeps the behavior inspectable while making it closer to a production knowledge agent used by engineering teams.
+
 Readiness path:
 
 ```txt

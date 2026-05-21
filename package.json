@@ -9,6 +9,7 @@
     "retrieve": "bun run src/cli/retrieve.ts",
     "ingest": "bun run src/cli/ingest.ts",
     "ask": "bun run src/cli/ask.ts",
+    "agent": "bun run src/cli/agent.ts",
     "serve": "bun run src/cli/server.ts",
     "eval": "bun run src/cli/eval.ts",
     "eval:judge": "bun run src/cli/judge-eval.ts",

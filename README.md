@@ -6,6 +6,22 @@ This repo is built as an AI Engineer interview artifact: clean ingestion, citati
 
 For the system-level design, see [`architecture.md`](architecture.md).
 
+## Protocol Knowledge Agent
+
+The repo includes a single-agent layer on top of the RAG pipeline:
+
+```txt
+question
+-> agent planning step
+-> focused retrieval queries
+-> retrieve_protocol_context tool calls
+-> evidence dedupe
+-> grounded answer with citations
+-> missing docs + next actions
+```
+
+This is more realistic than a one-shot API call. The agent plans what context it needs, calls retrieval as a tool, inspects evidence, and returns either a grounded answer or a clear missing-context response.
+
 ## Current pipeline
 
 ```txt
@@ -256,6 +272,14 @@ bun run ask "what are the protocol maintenance margin ratio, fees, and leverage 
 The final argument is `topK`. For example, `3` means retrieve the top 3 most relevant chunks from Qdrant and pass those chunks to the LLM as context.
 
 The LLM is instructed to return only valid JSON. The app validates that JSON with Zod before trusting it, so malformed model output fails fast instead of leaking into downstream API responses.
+
+Run the protocol knowledge agent:
+
+```bash
+bun run agent "How do liquidation agents stay safe?" 4 3
+```
+
+The second argument is `topK` per retrieval query. The third argument is the maximum number of search queries the agent may run.
 
 Run the HTTP API:
 
