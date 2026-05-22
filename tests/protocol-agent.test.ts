@@ -35,28 +35,35 @@ const signerSafetyChunk: SearchResult = {
 };
 
 describe("runProtocolKnowledgeAgent", () => {
-  it("plans retrieval, calls the retrieval tool, dedupes evidence, and returns a grounded answer", async () => {
+  it("lets the model call retrieval as a registered tool, then returns a grounded final answer", async () => {
     const prompts: Array<{ system: string; user: string }> = [];
     const llmClient: LlmClient = {
       async answer(prompt) {
         prompts.push(prompt);
         if (prompts.length === 1) {
           return JSON.stringify({
-            intent: "Explain agent liquidation safety.",
-            searchQueries: ["liquidation agent jobs", "signer safety allowlists"],
-            requiredContext: ["agent job execution docs", "signer safety docs"],
-            needsClarification: false,
+            action: "tool_call",
+            reasoning: "Need protocol and signer-safety docs before answering.",
+            toolName: "retrieve_protocol_context",
+            toolInput: {
+              query: "liquidation agent signer safety allowlists",
+              topK: 2,
+            },
           });
         }
 
         return JSON.stringify({
-          answer:
-            "Agents discover liquidation jobs and settle them on-chain [1]. Signer safety uses allowlists, value caps, and rate limits [2].",
-          confidence: "high",
-          citations: [{ sourceNumber: 1 }, { sourceNumber: 2 }],
-          missingContext: false,
-          missingDocs: [],
-          nextActions: ["Keep signer safety docs updated when new handlers are added."],
+          action: "final_answer",
+          reasoning: "The retrieved evidence covers both liquidation jobs and signer safety.",
+          finalAnswer: {
+            answer:
+              "Agents discover liquidation jobs and settle them on-chain [1]. Signer safety uses allowlists, value caps, and rate limits [2].",
+            confidence: "high",
+            citations: [{ sourceNumber: 1 }, { sourceNumber: 2 }],
+            missingContext: false,
+            missingDocs: [],
+            nextActions: ["Keep signer safety docs updated when new handlers are added."],
+          },
         });
       },
     };
@@ -73,16 +80,18 @@ describe("runProtocolKnowledgeAgent", () => {
       embeddingClient,
       store,
       llmClient,
-      topK: 2,
-      maxSearchQueries: 2,
+      topK: 4,
+      maxTurns: 3,
     });
 
-    expect(response.plan.searchQueries).toEqual(["liquidation agent jobs", "signer safety allowlists"]);
-    expect(response.toolCalls).toHaveLength(2);
+    expect(response.toolCalls).toHaveLength(1);
     expect(response.toolCalls[0]).toMatchObject({
-      tool: "retrieve_protocol_context",
-      query: "liquidation agent jobs",
-      topK: 2,
+      turn: 1,
+      toolName: "retrieve_protocol_context",
+      toolInput: {
+        query: "liquidation agent signer safety allowlists",
+        topK: 2,
+      },
     });
     expect(response.sources).toEqual([
       {
@@ -101,19 +110,25 @@ describe("runProtocolKnowledgeAgent", () => {
       },
     ]);
     expect(response.answer).toContain("settle them on-chain [1]");
-    expect(prompts[1].user).toContain("Retrieved evidence");
-    expect(prompts[1].user).toContain("Signer safety uses destination allowlists");
+    expect(prompts[0].user).toContain("retrieve_protocol_context");
+    expect(prompts[1].user).toContain("Numbered evidence available for final answers");
+    expect(prompts[1].user).toContain("[2] Source: protocol/signer-safety.md");
   });
 
-  it("returns a clarification response without retrieval when the plan requires clarification", async () => {
+  it("can return a missing-context final answer without retrieval", async () => {
     const llmClient: LlmClient = {
       async answer() {
         return JSON.stringify({
-          intent: "Clarify ambiguous protocol reference.",
-          searchQueries: ["unknown protocol"],
-          requiredContext: ["which protocol or docs set"],
-          needsClarification: true,
-          clarifyingQuestion: "Which protocol docs should I use?",
+          action: "final_answer",
+          reasoning: "The question is too ambiguous to retrieve useful context.",
+          finalAnswer: {
+            answer: "Which protocol docs should I use?",
+            confidence: "low",
+            citations: [],
+            missingContext: true,
+            missingDocs: ["which protocol or docs set"],
+            nextActions: ["Clarify the protocol or provide the relevant docs."],
+          },
         });
       },
     };

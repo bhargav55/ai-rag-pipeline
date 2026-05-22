@@ -60,19 +60,20 @@ user question
 
 ## Agent path
 
-The protocol knowledge agent wraps the online ask path with a planning and tool-use loop:
+The protocol knowledge agent wraps the online ask path with a typed tool registry and turn loop:
 
 ```txt
 user question
--> planning prompt
--> search query plan
--> retrieve_protocol_context tool calls
--> evidence dedupe
--> grounded answer prompt
+-> model emits tool_call or final_answer
+-> tool input validation
+-> retrieve_protocol_context execution
+-> observation + numbered evidence
+-> repeat until final answer or max turns
+-> final answer guardrails
 -> structured answer, citations, missing docs, next actions
 ```
 
-This is still a single-agent system: one planner/answerer uses retrieval as a tool instead of delegating to multiple agents. That keeps the behavior inspectable while making it closer to a production knowledge agent used by engineering teams.
+This is still a single-agent system: one model loop chooses tools and produces the final answer. The runtime owns the tool registry, Zod input validation, execution, observations, turn limits, citation validation, and missing-context guardrails.
 
 Readiness path:
 

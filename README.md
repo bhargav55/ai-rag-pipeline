@@ -12,15 +12,16 @@ The repo includes a single-agent layer on top of the RAG pipeline:
 
 ```txt
 question
--> agent planning step
--> focused retrieval queries
--> retrieve_protocol_context tool calls
--> evidence dedupe
--> grounded answer with citations
+-> LLM selects tool_call or final_answer
+-> validate tool input
+-> execute retrieve_protocol_context
+-> append observation and numbered evidence
+-> repeat until final answer or max turns
+-> validate citations and missing-context guardrails
 -> missing docs + next actions
 ```
 
-This is more realistic than a one-shot API call. The agent plans what context it needs, calls retrieval as a tool, inspects evidence, and returns either a grounded answer or a clear missing-context response.
+This is more realistic than a one-shot API call. The model chooses when to call a registered tool, while the runtime owns validation, execution, observations, turn limits, citation checks, and missing-context guardrails.
 
 ## Current pipeline
 
@@ -279,7 +280,7 @@ Run the protocol knowledge agent:
 bun run agent "How do liquidation agents stay safe?" 4 3
 ```
 
-The second argument is `topK` per retrieval query. The third argument is the maximum number of search queries the agent may run.
+The second argument is the default `topK` for retrieval tool calls. The third argument is `maxTurns`.
 
 Run the HTTP API:
 

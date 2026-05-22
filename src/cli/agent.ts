@@ -31,9 +31,9 @@ const createStore = (): AgentStore => {
 };
 
 const main = async () => {
-  const [question, topKArg, maxSearchQueriesArg] = Bun.argv.slice(2);
+  const [question, topKArg, maxTurnsArg] = Bun.argv.slice(2);
   if (!question) {
-    console.error("Usage: bun run agent <question> [topK] [maxSearchQueries]");
+    console.error("Usage: bun run agent <question> [topK] [maxTurns]");
     process.exit(1);
   }
 
@@ -45,7 +45,7 @@ const main = async () => {
       store,
       llmClient: new OpenAIChatClient(),
       topK: topKArg ? Number(topKArg) : 4,
-      maxSearchQueries: maxSearchQueriesArg ? Number(maxSearchQueriesArg) : 3,
+      maxTurns: maxTurnsArg ? Number(maxTurnsArg) : 6,
     });
 
     console.log(JSON.stringify({ store: name, ...response }, null, 2));
