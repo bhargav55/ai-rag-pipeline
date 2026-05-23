@@ -1,6 +1,7 @@
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { handleHttpRequest } from "../http-server";
 import { OpenAIChatClient } from "../llm/openai-chat";
+import { runProtocolKnowledgeAgent } from "../protocol-agent";
 import { answerWithRag } from "../rag";
 import { createLoggerTracer } from "../rag-tracing";
 import { checkReadiness } from "../readiness";
@@ -49,6 +50,23 @@ Bun.serve({
             llmClient: new OpenAIChatClient(),
             topK,
             trace: createLoggerTracer({ requestId, model: Bun.env.CHAT_MODEL ?? "gpt-5.5" }),
+          });
+
+          return { store: name, ...response };
+        } finally {
+          await close();
+        }
+      },
+      async agentAnswer({ question, topK, maxTurns }) {
+        const { store, close, name } = createStore();
+        try {
+          const response = await runProtocolKnowledgeAgent({
+            question,
+            embeddingClient: new OpenAIEmbeddingClient(),
+            store,
+            llmClient: new OpenAIChatClient(),
+            topK,
+            maxTurns,
           });
 
           return { store: name, ...response };
