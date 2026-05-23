@@ -1,4 +1,4 @@
-import type { EmbeddedChunk, SearchResult } from "./types";
+import type { EmbeddedChunk, SearchFilter, SearchResult } from "./types";
 
 const dot = (a: number[], b: number[]) => a.reduce((sum, value, index) => sum + value * b[index], 0);
 const magnitude = (vector: number[]) => Math.sqrt(dot(vector, vector));
@@ -20,8 +20,10 @@ export class InMemoryVectorStore {
     this.chunks.push(...chunks);
   }
 
-  search(queryEmbedding: number[], topK: number): SearchResult[] {
+  search(queryEmbedding: number[], topK: number, filter: SearchFilter = {}): SearchResult[] {
     return this.chunks
+      .filter((chunk) => !filter.tenantId || chunk.tenantId === filter.tenantId)
+      .filter((chunk) => !filter.siteId || chunk.siteId === filter.siteId)
       .map((chunk) => ({
         chunk,
         score: cosineSimilarity(queryEmbedding, chunk.embedding),

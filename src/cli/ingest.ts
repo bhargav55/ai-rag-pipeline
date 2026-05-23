@@ -31,6 +31,8 @@ const embeddingModel = () => Bun.env.EMBEDDING_MODEL ?? "text-embedding-3-small"
 const indexVersion = () => Bun.env.INDEX_VERSION ?? defaultIndexVersion();
 const registryStore = () => Bun.env.DOCUMENT_REGISTRY_STORE ?? "postgres";
 const registryPath = () => Bun.env.DOCUMENT_REGISTRY_PATH ?? ".rag/document-registry.json";
+const tenantId = () => Bun.env.TENANT_ID;
+const siteId = () => Bun.env.SITE_ID;
 
 const createRegistry = (db?: postgres.Sql): Pick<IngestServices, "registry" | "registryStore" | "registryPath"> => {
   const store = registryStore();
@@ -89,7 +91,12 @@ const main = async () => {
   const embeddingClient = new OpenAIEmbeddingClient();
   const { store, registry, registryStore: activeRegistryStore, registryPath: activeRegistryPath } = await createServices();
 
-  const documents = await loadDocuments(docsDir);
+  const currentTenantId = tenantId();
+  const currentSiteId = siteId();
+  const documents = await loadDocuments(docsDir, {
+    tenantId: currentTenantId,
+    siteId: currentSiteId,
+  });
   const chunks = documents.flatMap((doc) => chunkMarkdownDocument(doc, { maxChars: 800, overlapChars: 120 }));
   const currentEmbeddingModel = embeddingModel();
   const currentEmbeddingDimension = embeddingDimension();
@@ -117,6 +124,8 @@ const main = async () => {
     JSON.stringify(
       {
         docsDir,
+        tenantId: currentTenantId,
+        siteId: currentSiteId,
         documents: documents.length,
         chunks: chunks.length,
         upsertedChunks: embeddedChunks.length,

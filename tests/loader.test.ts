@@ -50,6 +50,23 @@ describe("loadDocuments", () => {
     ]);
   });
 
+  it("loads documents with tenant and site scope when provided", async () => {
+    const docsDir = tmpDocsDir();
+    await writeDoc(docsDir, "profile.md", "# Profile\nPortfolio summary.");
+
+    await expect(loadDocuments(docsDir, { tenantId: "personal", siteId: "bhargav-portfolio" })).resolves.toEqual([
+      {
+        sourcePath: "personal/bhargav-portfolio/profile.md",
+        extension: ".md",
+        sizeBytes: 28,
+        domain: "bhargav-portfolio",
+        text: "# Profile\nPortfolio summary.",
+        tenantId: "personal",
+        siteId: "bhargav-portfolio",
+      },
+    ]);
+  });
+
   it("throws a clean error for missing directories", async () => {
     await expect(loadDocuments("/definitely/missing/docs-dir")).rejects.toThrow(
       "Docs directory not found",

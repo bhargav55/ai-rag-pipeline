@@ -20,6 +20,8 @@ export const chunkDocument = (doc: Document, options: ChunkOptions): Chunk[] => 
       domain: doc.domain,
       index,
       text,
+      ...(doc.tenantId ? { tenantId: doc.tenantId } : {}),
+      ...(doc.siteId ? { siteId: doc.siteId } : {}),
     });
   }
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { EmbeddedChunk, SearchResult, VectorSearchStore } from "../types";
+import type { EmbeddedChunk, SearchFilter, SearchResult, VectorSearchStore } from "../types";
 
 type QdrantFetch = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -18,6 +18,8 @@ type QdrantPayload = {
   chunkIndex: number;
   text: string;
   headingPath?: string[];
+  tenantId?: string;
+  siteId?: string;
   contentHash?: string;
   chunkHash?: string;
   embeddingModel?: string;
@@ -50,6 +52,15 @@ const vectorFromResult = (vector: QdrantSearchPoint["vector"]): number[] => {
   if (Array.isArray(vector)) return vector;
   if (vector && Array.isArray(vector.default)) return vector.default;
   return [];
+};
+
+const qdrantFilter = ({ tenantId, siteId }: SearchFilter) => {
+  const must = [
+    tenantId ? { key: "tenantId", match: { value: tenantId } } : undefined,
+    siteId ? { key: "siteId", match: { value: siteId } } : undefined,
+  ].filter(Boolean);
+
+  return must.length > 0 ? { must } : undefined;
 };
 
 type QdrantRequestInit = RequestInit & {
@@ -100,6 +111,8 @@ export class QdrantVectorStore implements VectorSearchStore {
             chunkIndex: chunk.index,
             text: chunk.text,
             headingPath: chunk.headingPath,
+            tenantId: chunk.tenantId,
+            siteId: chunk.siteId,
             contentHash: chunk.contentHash,
             chunkHash: chunk.chunkHash,
             embeddingModel: chunk.embeddingModel,
@@ -123,7 +136,8 @@ export class QdrantVectorStore implements VectorSearchStore {
     });
   }
 
-  async search(queryEmbedding: number[], topK: number): Promise<SearchResult[]> {
+  async search(queryEmbedding: number[], topK: number, filter: SearchFilter = {}): Promise<SearchResult[]> {
+    const qdrantSearchFilter = qdrantFilter(filter);
     const response = await this.request<QdrantSearchResponse>(`/collections/${this.collection}/points/search`, {
       method: "POST",
       body: JSON.stringify({
@@ -131,6 +145,7 @@ export class QdrantVectorStore implements VectorSearchStore {
         limit: topK,
         with_payload: true,
         with_vector: true,
+        ...(qdrantSearchFilter ? { filter: qdrantSearchFilter } : {}),
       }),
     });
 
@@ -145,6 +160,8 @@ export class QdrantVectorStore implements VectorSearchStore {
           index: Number(payload.chunkIndex ?? 0),
           text: String(payload.text ?? ""),
           headingPath: Array.isArray(payload.headingPath) ? payload.headingPath.map(String) : undefined,
+          tenantId: typeof payload.tenantId === "string" ? payload.tenantId : undefined,
+          siteId: typeof payload.siteId === "string" ? payload.siteId : undefined,
           contentHash: typeof payload.contentHash === "string" ? payload.contentHash : undefined,
           chunkHash: typeof payload.chunkHash === "string" ? payload.chunkHash : undefined,
           embeddingModel: typeof payload.embeddingModel === "string" ? payload.embeddingModel : undefined,

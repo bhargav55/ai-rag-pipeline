@@ -8,6 +8,8 @@ const AskRequestSchema = z.object({
 const AgentAskRequestSchema = AskRequestSchema.extend({
   topK: z.number().int().positive().max(20).default(4),
   maxTurns: z.number().int().positive().max(12).default(6),
+  tenantId: z.string().trim().min(1).optional(),
+  siteId: z.string().trim().min(1).optional(),
 });
 
 type AskRequest = z.infer<typeof AskRequestSchema>;

@@ -1,4 +1,4 @@
-import type { Chunk, EmbeddedChunk, EmbeddingClient, SearchResult } from "./types";
+import type { Chunk, EmbeddedChunk, EmbeddingClient, SearchFilter, SearchResult } from "./types";
 import { InMemoryVectorStore } from "./vector-store";
 
 export type RetrievalIndex = {
@@ -27,7 +27,8 @@ export const retrieve = async (
   embeddingClient: EmbeddingClient,
   query: string,
   topK: number,
+  filter?: SearchFilter,
 ): Promise<SearchResult[]> => {
   const [queryEmbedding] = await embeddingClient.embed([query]);
-  return index.store.search(queryEmbedding, topK);
+  return index.store.search(queryEmbedding, topK, filter);
 };

@@ -15,6 +15,8 @@ type ServerStore = {
 };
 
 const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
+const defaultTenantId = () => Bun.env.DEFAULT_TENANT_ID;
+const defaultSiteId = () => Bun.env.DEFAULT_SITE_ID;
 
 const createStore = (): ServerStore => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
@@ -57,8 +59,10 @@ Bun.serve({
           await close();
         }
       },
-      async agentAnswer({ question, topK, maxTurns }) {
+      async agentAnswer({ question, topK, maxTurns, tenantId, siteId }) {
         const { store, close, name } = createStore();
+        const resolvedTenantId = tenantId ?? defaultTenantId();
+        const resolvedSiteId = siteId ?? defaultSiteId();
         try {
           const response = await runProtocolKnowledgeAgent({
             question,
@@ -67,9 +71,13 @@ Bun.serve({
             llmClient: new OpenAIChatClient(),
             topK,
             maxTurns,
+            filter: {
+              tenantId: resolvedTenantId,
+              siteId: resolvedSiteId,
+            },
           });
 
-          return { store: name, ...response };
+          return { store: name, tenantId: resolvedTenantId, siteId: resolvedSiteId, ...response };
         } finally {
           await close();
         }

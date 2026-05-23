@@ -73,6 +73,7 @@ The LLM generates the final answer, grounded by the retrieved chunks.
 - Stale chunk deletion for changed documents whose chunk IDs disappear
 - Production OpenAI-compatible embeddings client
 - Qdrant vector database store
+- Tenant/site metadata filters for multi-corpus website chatbots
 - In-memory vector store kept for tests/simple demos
 - Retriever that embeds the user query and returns top-k matching chunks
 - Prompt builder that combines retrieved context with user input
@@ -325,10 +326,24 @@ Ask through the tool-using chatbot agent:
 curl -s \
   -X POST http://localhost:3000/agent/ask \
   -H "Content-Type: application/json" \
-  -d '{"question":"how do liquidation agents stay safe?","topK":4,"maxTurns":6}' | jq
+  -d '{"tenantId":"personal","siteId":"bhargav-portfolio","question":"what did Bhargav build at Nunchi?","topK":4,"maxTurns":6}' | jq
 ```
 
 `/agent/ask` uses the same indexed corpus and vector store, but routes the request through the protocol knowledge agent. The agent can call retrieval tools, validate tool inputs, enforce turn limits, and return grounded answers with citations. Browser CORS is enabled so a static portfolio site can call this endpoint without exposing OpenAI or Qdrant credentials.
+
+For website chatbot deployments, pass `tenantId` and `siteId` so retrieval is filtered to the correct corpus. The same Qdrant collection and Postgres database can hold multiple customers or websites as long as every ingest and query carries the correct scope.
+
+Ingest the personal portfolio corpus:
+
+```bash
+TENANT_ID=personal SITE_ID=bhargav-portfolio bun run ingest data/docs/portfolio
+```
+
+When the server should default to the portfolio corpus for requests that do not include explicit scope:
+
+```bash
+DEFAULT_TENANT_ID=personal DEFAULT_SITE_ID=bhargav-portfolio bun run serve
+```
 
 Example answer shape:
 

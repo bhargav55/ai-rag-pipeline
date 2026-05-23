@@ -199,4 +199,30 @@ describe("QdrantVectorStore", () => {
       },
     ]);
   });
+
+  it("searches Qdrant with tenant and site filters", async () => {
+    const fake = new FakeFetch();
+    fake.responses = [{ result: [] }];
+    const store = new QdrantVectorStore({
+      url: "http://localhost:6333",
+      collection: "rag_chunks",
+      dimension: 2,
+      fetch: fake.fetch,
+    });
+
+    await store.search([0.1, 0.9], 3, { tenantId: "personal", siteId: "bhargav-portfolio" });
+
+    expect(JSON.parse(String(fake.calls[0].init?.body))).toEqual({
+      vector: [0.1, 0.9],
+      limit: 3,
+      with_payload: true,
+      with_vector: true,
+      filter: {
+        must: [
+          { key: "tenantId", match: { value: "personal" } },
+          { key: "siteId", match: { value: "bhargav-portfolio" } },
+        ],
+      },
+    });
+  });
 });

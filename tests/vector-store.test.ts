@@ -37,4 +37,25 @@ describe("InMemoryVectorStore", () => {
 
     expect(() => store.search([1], 1)).toThrow("Embedding dimension mismatch");
   });
+
+  it("filters search by tenant and site", () => {
+    const store = new InMemoryVectorStore();
+    store.addMany([
+      {
+        ...chunk("portfolio", [1, 0], "portfolio profile"),
+        tenantId: "personal",
+        siteId: "bhargav-portfolio",
+      },
+      {
+        ...chunk("customer-docs", [1, 0], "customer docs"),
+        tenantId: "customer",
+        siteId: "developer-docs",
+      },
+    ]);
+
+    const results = store.search([1, 0], 10, { tenantId: "personal", siteId: "bhargav-portfolio" });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].chunk.id).toBe("portfolio");
+  });
 });

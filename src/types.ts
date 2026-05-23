@@ -6,6 +6,8 @@ export type Document = {
   sizeBytes: number;
   domain: string;
   text: string;
+  tenantId?: string;
+  siteId?: string;
 };
 
 export type Chunk = {
@@ -15,6 +17,8 @@ export type Chunk = {
   index: number;
   text: string;
   headingPath?: string[];
+  tenantId?: string;
+  siteId?: string;
 };
 
 export type ChunkOptions = {
@@ -42,12 +46,17 @@ export type SearchResult = {
   score: number;
 };
 
+export type SearchFilter = {
+  tenantId?: string;
+  siteId?: string;
+};
+
 export type EmbeddingClient = {
   embed(input: string[]): Promise<number[][]>;
 };
 
 export type VectorSearchStore = {
-  search(queryEmbedding: number[], topK: number): Promise<SearchResult[]> | SearchResult[];
+  search(queryEmbedding: number[], topK: number, filter?: SearchFilter): Promise<SearchResult[]> | SearchResult[];
 };
 
 export type LlmPrompt = {
