@@ -1,7 +1,7 @@
 import { runAgent, type AgentRunnerResponse } from "./agent/runner";
 import { createRetrieveProtocolContextTool } from "./agent/tools/retrieve-protocol-context";
 import { ToolRegistry } from "./agent/tool";
-import type { EmbeddingClient, LlmClient, VectorSearchStore } from "./types";
+import type { EmbeddingClient, LlmClient, SearchFilter, VectorSearchStore } from "./types";
 
 export type ProtocolKnowledgeAgentInput = {
   question: string;
@@ -10,6 +10,7 @@ export type ProtocolKnowledgeAgentInput = {
   llmClient: LlmClient;
   topK?: number;
   maxTurns?: number;
+  filter?: SearchFilter;
 };
 
 export type ProtocolKnowledgeAgentResponse = AgentRunnerResponse;
@@ -21,12 +22,14 @@ export const runProtocolKnowledgeAgent = async ({
   llmClient,
   topK = 4,
   maxTurns = 6,
+  filter,
 }: ProtocolKnowledgeAgentInput): Promise<ProtocolKnowledgeAgentResponse> => {
   const tools = new ToolRegistry([
     createRetrieveProtocolContextTool({
       embeddingClient,
       store,
       defaultTopK: topK,
+      filter,
     }),
   ]);
 

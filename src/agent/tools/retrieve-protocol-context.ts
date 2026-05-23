@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { EmbeddingClient, SearchResult, VectorSearchStore } from "../../types";
+import type { EmbeddingClient, SearchFilter, SearchResult, VectorSearchStore } from "../../types";
 import type { AgentToolDefinition } from "../tool";
 
 export type RetrievedProtocolChunk = {
@@ -20,12 +20,14 @@ type CreateRetrieveProtocolContextToolInput = {
   embeddingClient: EmbeddingClient;
   store: VectorSearchStore;
   defaultTopK?: number;
+  filter?: SearchFilter;
 };
 
 export const createRetrieveProtocolContextTool = ({
   embeddingClient,
   store,
   defaultTopK = 4,
+  filter,
 }: CreateRetrieveProtocolContextToolInput): AgentToolDefinition => {
   const inputSchema = z.object({
     query: z.string().min(1),
@@ -40,7 +42,7 @@ export const createRetrieveProtocolContextTool = ({
     async execute(input) {
       const { query, topK } = inputSchema.parse(input);
       const [embedding] = await embeddingClient.embed([query]);
-      const rawResults = await store.search(embedding, topK);
+      const rawResults = await store.search(embedding, topK, filter);
 
       return {
         query,

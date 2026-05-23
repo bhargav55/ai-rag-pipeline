@@ -1,6 +1,7 @@
 import { OpenAIEmbeddingClient } from "../embeddings/openai";
 import { handleHttpRequest } from "../http-server";
 import { OpenAIChatClient } from "../llm/openai-chat";
+import { runProtocolKnowledgeAgent } from "../protocol-agent";
 import { answerWithRag } from "../rag";
 import { createLoggerTracer } from "../rag-tracing";
 import { checkReadiness } from "../readiness";
@@ -14,6 +15,8 @@ type ServerStore = {
 };
 
 const embeddingDimension = () => Number(Bun.env.EMBEDDING_DIMENSION ?? "1536");
+const defaultTenantId = () => Bun.env.DEFAULT_TENANT_ID;
+const defaultSiteId = () => Bun.env.DEFAULT_SITE_ID;
 
 const createStore = (): ServerStore => {
   const vectorStore = Bun.env.VECTOR_STORE ?? "qdrant";
@@ -52,6 +55,29 @@ Bun.serve({
           });
 
           return { store: name, ...response };
+        } finally {
+          await close();
+        }
+      },
+      async agentAnswer({ question, topK, maxTurns, tenantId, siteId }) {
+        const { store, close, name } = createStore();
+        const resolvedTenantId = tenantId ?? defaultTenantId();
+        const resolvedSiteId = siteId ?? defaultSiteId();
+        try {
+          const response = await runProtocolKnowledgeAgent({
+            question,
+            embeddingClient: new OpenAIEmbeddingClient(),
+            store,
+            llmClient: new OpenAIChatClient(),
+            topK,
+            maxTurns,
+            filter: {
+              tenantId: resolvedTenantId,
+              siteId: resolvedSiteId,
+            },
+          });
+
+          return { store: name, tenantId: resolvedTenantId, siteId: resolvedSiteId, ...response };
         } finally {
           await close();
         }
