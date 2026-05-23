@@ -8,9 +8,9 @@ It should answer from indexed portfolio documents and cite retrieved sources. If
 
 ## Knowledge Sources
 
-The first corpus includes clean Markdown documents derived from the portfolio website and resume content.
+The first corpus includes clean Markdown documents derived from the portfolio website and resume PDF content.
 
-Future corpus sources can include the live website HTML, resume PDF, project README files, developer documentation, whitepapers, audit reports, research notes, and support documentation.
+Future corpus sources can include the live website HTML, project README files, developer documentation, whitepapers, audit reports, research notes, and support documentation.
 
 ## Multi-Tenant Design
 
